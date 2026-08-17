@@ -1,0 +1,12 @@
+services:
+  kalorien-tagebuch:
+    build: .
+    container_name: kalorien-tagebuch
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=claude-sonnet-4-6
+    volumes:
+      - ./data:/app/data
