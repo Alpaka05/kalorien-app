@@ -5,11 +5,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+COPY *.py ./
 COPY static ./static
 
 RUN mkdir -p /app/data
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "app:app"]
+# Ein Worker mit Threads: SQLite verträgt parallele Schreibzugriffe schlecht,
+# und die Wartezeit steckt ohnehin in den API-Aufrufen, nicht in der CPU.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "8", "--timeout", "120", "app:app"]

@@ -1,0 +1,129 @@
+"""SQLite-Zugriff, Schema und Migrationen.
+
+Die Datenbank liegt unter data/kalorien.db und ist über das Docker-Volume
+persistent. Alle Schema-Änderungen hier sind idempotent, damit die App mit
+mehreren Gunicorn-Workern und über Updates hinweg sauber startet.
+"""
+
+import os
+import sqlite3
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.environ.get("DB_PATH") or os.path.join(APP_DIR, "data", "kalorien.db")
+
+TABLES = """
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    email         TEXT NOT NULL UNIQUE,
+    display_name  TEXT,
+    kcal_goal     REAL,
+    protein_goal  REAL,
+    created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS entries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER,
+    entry_date  TEXT NOT NULL,
+    entry_time  TEXT NOT NULL,
+    "desc"      TEXT NOT NULL,
+    kcal        REAL NOT NULL,
+    protein     REAL,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS weights (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    weigh_date  TEXT NOT NULL,
+    kg          REAL NOT NULL,
+    created_at  TEXT NOT NULL,
+    UNIQUE (user_id, weigh_date)
+);
+
+CREATE TABLE IF NOT EXISTS login_codes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    email       TEXT NOT NULL,
+    code_hash   TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    consumed_at TEXT,
+    request_ip  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash  TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    last_seen   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS coach_cache (
+    user_id     INTEGER NOT NULL,
+    day         TEXT NOT NULL,
+    inputs_hash TEXT NOT NULL,
+    payload     TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (user_id, day)
+);
+"""
+
+# Indizes erst nach den Migrationen anlegen: auf einer Datenbank aus der
+# Single-User-Version existiert entries.user_id beim ersten Start noch nicht.
+INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries (user_id, entry_date);
+CREATE INDEX IF NOT EXISTS idx_weights_user_date ON weights (user_id, weigh_date);
+CREATE INDEX IF NOT EXISTS idx_sessions_user      ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_login_codes_email  ON login_codes (email, created_at);
+"""
+
+
+def connect() -> sqlite3.Connection:
+    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, timeout=15)
+    conn.row_factory = sqlite3.Row
+    # WAL, damit gleichzeitige Lese- und Schreibzugriffe der Gunicorn-Worker
+    # sich nicht blockieren; busy_timeout fängt kurze Schreibkollisionen ab.
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 15000")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    return conn
+
+
+def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row["name"] for row in conn.execute(f'PRAGMA table_info("{table}")')}
+
+
+def init_db() -> None:
+    conn = connect()
+    try:
+        conn.executescript(TABLES)
+        # Migration von der Single-User-Version: entries hatte weder user_id
+        # noch protein.
+        entry_cols = _columns(conn, "entries")
+        if "user_id" not in entry_cols:
+            conn.execute("ALTER TABLE entries ADD COLUMN user_id INTEGER")
+        if "protein" not in entry_cols:
+            conn.execute("ALTER TABLE entries ADD COLUMN protein REAL")
+        conn.commit()
+        conn.executescript(INDEXES)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def adopt_orphan_entries(conn: sqlite3.Connection, user_id: int) -> int:
+    """Weist Einträge ohne Besitzer dem ersten registrierten Konto zu.
+
+    Vor dem Account-System gehörten alle Einträge derselben Person. Damit deren
+    Verlauf beim Umstieg nicht verloren geht, übernimmt sie der erste Account.
+    """
+    user_count = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+    if user_count != 1:
+        return 0
+    cur = conn.execute(
+        "UPDATE entries SET user_id = ? WHERE user_id IS NULL", (user_id,)
+    )
+    return cur.rowcount or 0
