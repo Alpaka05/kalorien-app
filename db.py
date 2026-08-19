@@ -96,6 +96,38 @@ def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {row["name"] for row in conn.execute(f'PRAGMA table_info("{table}")')}
 
 
+def _fix_legacy_times(conn: sqlite3.Connection) -> None:
+    """Rechnet Einträge aus der Single-User-Version auf lokale Zeit um.
+
+    Damals wurden Datum und Uhrzeit ohne Zeitzone geschrieben, in einem
+    Container, der in UTC läuft. Die Anzeige lag dadurch 1–2 Stunden zurück,
+    und alles zwischen lokal 00:00 und 02:00 landete am Vortag. Ohne diese
+    Korrektur würde der Altbestand den Fehler dauerhaft behalten.
+    """
+    from datetime import datetime, timezone
+
+    from timeutil import TZ
+
+    rows = conn.execute("SELECT id, entry_date, entry_time FROM entries").fetchall()
+    corrected = []
+    for row in rows:
+        try:
+            as_utc = datetime.fromisoformat(
+                f"{row['entry_date']} {row['entry_time']}"
+            ).replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            continue  # unerwartetes Format lieber unangetastet lassen
+        local = as_utc.astimezone(TZ)
+        corrected.append(
+            (local.date().isoformat(), local.strftime("%H:%M"), row["id"])
+        )
+    if corrected:
+        conn.executemany(
+            "UPDATE entries SET entry_date = ?, entry_time = ? WHERE id = ?",
+            corrected,
+        )
+
+
 def init_db() -> None:
     conn = connect()
     try:
@@ -104,6 +136,9 @@ def init_db() -> None:
         # noch protein.
         entry_cols = _columns(conn, "entries")
         if "user_id" not in entry_cols:
+            # Diese Bedingung trifft genau einmal pro Datenbank zu und ist
+            # damit der richtige Ort für die einmalige Zeitkorrektur.
+            _fix_legacy_times(conn)
             conn.execute("ALTER TABLE entries ADD COLUMN user_id INTEGER")
         if "protein" not in entry_cols:
             conn.execute("ALTER TABLE entries ADD COLUMN protein REAL")

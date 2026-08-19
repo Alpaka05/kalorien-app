@@ -117,9 +117,14 @@ def parse_date(value, field: str = "Datum") -> str:
     from datetime import date
 
     try:
-        date.fromisoformat(value)
+        parsed = date.fromisoformat(value)
     except ValueError:
         raise ValueError(f"{field} ist kein gültiges Datum.") from None
+    # Extreme Jahre sind formal gültig, aber späteres Rechnen damit (etwa
+    # "30 Tage davor") läuft aus dem Wertebereich und würde die Auswertung
+    # dauerhaft mit einem Serverfehler blockieren.
+    if not date(2000, 1, 1) <= parsed <= date(2100, 12, 31):
+        raise ValueError(f"{field} muss zwischen 2000 und 2100 liegen.")
     return value
 
 
@@ -617,21 +622,28 @@ def coach_inputs(conn, user) -> dict:
     dates = date_range_iso(14)
     rows = conn.execute(
         "SELECT entry_date, COALESCE(SUM(kcal), 0) AS total, "
-        "       COALESCE(SUM(protein), 0) AS protein, COUNT(*) AS entries "
+        "       COALESCE(SUM(protein), 0) AS protein, COUNT(*) AS entries, "
+        "       SUM(CASE WHEN protein IS NOT NULL THEN 1 ELSE 0 END) AS protein_rows "
         "FROM entries WHERE user_id = ? AND entry_date BETWEEN ? AND ? "
         "GROUP BY entry_date",
         (user["id"], dates[0], dates[-1]),
     ).fetchall()
     by_date = {r["entry_date"]: r for r in rows}
-    days = [
-        {
-            "datum": d,
-            "kcal": round(by_date[d]["total"]) if d in by_date else 0,
-            "eiweiss_g": round(by_date[d]["protein"]) if d in by_date else 0,
-            "eintraege": by_date[d]["entries"] if d in by_date else 0,
+
+    def day_entry(iso: str) -> dict:
+        row = by_date.get(iso)
+        if not row:
+            return {"datum": iso, "kcal": 0, "eiweiss_g": None, "eintraege": 0}
+        return {
+            "datum": iso,
+            "kcal": round(row["total"]),
+            # Ohne Eiweißangabe null statt 0 – sonst behauptet die
+            # Einschätzung eine Null, die nie erfasst wurde.
+            "eiweiss_g": round(row["protein"]) if row["protein_rows"] else None,
+            "eintraege": row["entries"],
         }
-        for d in dates
-    ]
+
+    days = [day_entry(d) for d in dates]
     logged = [d for d in days if d["eintraege"] > 0]
     weights = conn.execute(
         "SELECT weigh_date, kg FROM weights WHERE user_id = ? "
