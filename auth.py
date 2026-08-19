@@ -41,20 +41,25 @@ class AuthError(Exception):
 # --------------------------------------------------------------------------
 
 def _load_secret() -> bytes:
+    # Ein selbst gesetzter SECRET_KEY wird auf volle Länge gehasht, damit auch
+    # eine kurze Eingabe einen brauchbaren HMAC-Schlüssel ergibt und die App
+    # nicht wegen der Schlüssellänge nicht mehr startet.
+    env_secret = os.environ.get("SECRET_KEY", "").strip()
+    if env_secret:
+        return sha256(b"kalorien-app/v1:" + env_secret.encode("utf-8")).digest()
+
     secret = _read_or_create_secret()
-    # Ein leerer Schlüssel würde alle HMACs entwerten, ohne dass es auffällt.
+    # Hier zählt die Länge: ein leerer Schlüssel aus einer beschädigten Datei
+    # würde alle HMACs entwerten, ohne dass es auffällt.
     if len(secret) < 16:
         raise RuntimeError(
-            "Der Session-Schlüssel ist leer oder zu kurz. Lösche data/secret_key "
-            "oder setze SECRET_KEY in der .env."
+            "data/secret_key ist leer oder zu kurz. Datei löschen (alle "
+            "Anmeldungen werden dadurch ungültig) oder SECRET_KEY in der .env setzen."
         )
     return secret
 
 
 def _read_or_create_secret() -> bytes:
-    env_secret = os.environ.get("SECRET_KEY", "").strip()
-    if env_secret:
-        return env_secret.encode("utf-8")
     # Ohne SECRET_KEY in der .env wird einmalig einer erzeugt und neben der
     # Datenbank abgelegt, damit Sessions einen Neustart überleben.
     path = os.path.join(os.path.dirname(db.DB_PATH), "secret_key")
