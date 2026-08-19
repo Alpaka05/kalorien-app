@@ -8,6 +8,11 @@ const dateLong = (iso) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('de-DE', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+// Bewusst nicht toISOString(): das rechnet auf UTC um und verschiebt das Datum
+// in unserer Zeitzone um einen Tag nach hinten.
+const isoLocal = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-` +
+  `${String(date.getDate()).padStart(2, '0')}`;
 
 const $ = (id) => document.getElementById(id);
 
@@ -173,6 +178,10 @@ function buildEntryRow(entry) {
 function buildEditForm(entry) {
   const form = document.createElement('form');
   form.className = 'edit-form';
+  // Die Prüfung macht der Server (mit verständlichen Meldungen). Ohne das
+  // würde der Browser das Absenden bei einem Wert, der nicht zum step passt,
+  // stillschweigend verweigern – der Klick auf Speichern bliebe wirkungslos.
+  form.noValidate = true;
 
   const descInput = document.createElement('input');
   descInput.type = 'text';
@@ -182,10 +191,10 @@ function buildEditForm(entry) {
   const grid = document.createElement('div');
   grid.className = 'edit-grid';
   const fields = [
-    { key: 'kcal', label: 'kcal', value: Math.round(entry.kcal), step: '10', min: '0' },
+    { key: 'kcal', label: 'kcal', value: Math.round(entry.kcal), step: 'any', min: '0' },
     {
       key: 'protein', label: 'Eiweiß (g)',
-      value: entry.protein == null ? '' : Math.round(entry.protein), step: '1', min: '0',
+      value: entry.protein == null ? '' : Math.round(entry.protein), step: 'any', min: '0',
     },
   ];
   const inputs = {};
@@ -351,6 +360,12 @@ function renderSummary() {
   const goal = data.kcal_goal || 0;
   const maxValue = Math.max(...data.series.map((d) => d.total), goal, 1);
   const chartHeight = 110;
+  // Bei vielen Tagen frisst der Abstand die Balkenbreite auf – auf dem Handy
+  // bleiben sonst 5 px übrig, die man nicht treffen kann. Zahlen über den
+  // Balken und jedes Datum würden sich dort ebenfalls überlappen.
+  const dense = data.series.length > 14;
+  chart.style.gap = dense ? '2px' : '6px';
+  const labelEvery = dense ? 5 : 1;
 
   if (goal) {
     const line = document.createElement('div');
@@ -362,16 +377,19 @@ function renderSummary() {
     chart.appendChild(line);
   }
 
-  data.series.forEach((day) => {
+  data.series.forEach((day, index) => {
     const isToday = day.date === data.today;
+    const fromEnd = data.series.length - 1 - index;
+    const showLabel = fromEnd % labelEvery === 0;
     const col = document.createElement('button');
     col.type = 'button';
     col.className = 'week-col' + (state.selectedDay === day.date ? ' selected' : '');
     col.title = `${dateLong(day.date)}: ${fmtKcal(day.total)}`;
+    col.setAttribute('aria-label', col.title);
 
     const total = document.createElement('span');
     total.className = 'week-total';
-    total.textContent = day.total ? fmtNum(day.total) : '';
+    total.textContent = !dense && day.total ? fmtNum(day.total) : '';
 
     const bar = document.createElement('div');
     bar.className = 'week-bar';
@@ -381,10 +399,11 @@ function renderSummary() {
 
     const label = document.createElement('span');
     label.className = 'week-label' + (isToday ? ' today' : '');
-    label.textContent =
-      state.range > 14
+    if (showLabel) {
+      label.textContent = dense
         ? new Date(day.date + 'T00:00:00').getDate()
         : weekdayShort(day.date);
+    }
 
     col.append(total, bar, label);
     col.addEventListener('click', () => selectDay(day.date));
@@ -458,11 +477,7 @@ function shiftRange(direction) {
   const base = new Date((state.end || state.summary.today) + 'T00:00:00');
   base.setDate(base.getDate() + direction * state.range);
   const todayDate = new Date(state.summary.today + 'T00:00:00');
-  if (base >= todayDate) {
-    state.end = null;
-  } else {
-    state.end = base.toISOString().slice(0, 10);
-  }
+  state.end = base >= todayDate ? null : isoLocal(base);
   state.selectedDay = null;
   $('day-detail').hidden = true;
   loadSummary().catch((err) => setMessage($('error-msg'), err.message));
