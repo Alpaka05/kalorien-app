@@ -333,10 +333,18 @@ async function loadFavorites() {
 // Verlaufsdiagramm
 // --------------------------------------------------------------------------
 
+let summaryRequest = 0;
+
 async function loadSummary() {
   const params = new URLSearchParams({ days: String(state.range) });
   if (state.end) params.set('end', state.end);
-  state.summary = await api('/api/summary?' + params.toString());
+  // Antworten können in anderer Reihenfolge zurückkommen als die Anfragen
+  // gestellt wurden. Ohne diese Prüfung landen die Balken eines Zeitraums
+  // unter der Überschrift und dem Durchschnitt eines anderen.
+  const ticket = ++summaryRequest;
+  const data = await api('/api/summary?' + params.toString());
+  if (ticket !== summaryRequest) return;
+  state.summary = data;
   renderSummary();
 }
 
@@ -359,7 +367,11 @@ function renderSummary() {
 
   const goal = data.kcal_goal || 0;
   const maxValue = Math.max(...data.series.map((d) => d.total), goal, 1);
-  const chartHeight = 110;
+  // Muss zur CSS-Geometrie passen: .week-chart ist 140px hoch, davon gehen
+  // .week-total (12) + 2x gap (10) + .week-label (15) ab. Ist der Wert größer,
+  // staucht Flexbox die hohen Balken auf dieselbe Höhe.
+  const chartHeight = 103;
+  const barBaseline = 20; // Abstand Balkenunterkante zum Diagrammboden
   // Bei vielen Tagen frisst der Abstand die Balkenbreite auf – auf dem Handy
   // bleiben sonst 5 px übrig, die man nicht treffen kann. Zahlen über den
   // Balken und jedes Datum würden sich dort ebenfalls überlappen.
@@ -370,7 +382,9 @@ function renderSummary() {
   if (goal) {
     const line = document.createElement('div');
     line.className = 'goal-line';
-    line.style.bottom = 16 + (goal / maxValue) * chartHeight + 'px';
+    // Gleiche Grundlinie und gleicher Maßstab wie die Balken, sonst markiert
+    // die Linie einen anderen Wert als den, der daneben steht.
+    line.style.bottom = barBaseline + (goal / maxValue) * chartHeight + 'px';
     const tag = document.createElement('span');
     tag.textContent = 'Ziel ' + fmtNum(goal);
     line.appendChild(tag);
@@ -436,18 +450,22 @@ async function renderDayDetail(reload = false) {
     box.hidden = true;
     return;
   }
+  const wanted = state.selectedDay;
   box.hidden = false;
-  $('day-detail-date').textContent = dateLong(state.selectedDay);
-  if (reload || !state.dayCache || state.dayCache.date !== state.selectedDay) {
+  $('day-detail-date').textContent = dateLong(wanted);
+  if (reload || !state.dayCache || state.dayCache.date !== wanted) {
     $('day-detail-list').textContent = 'Lade…';
+    let loaded;
     try {
-      state.dayCache = await api(
-        '/api/entries?date=' + encodeURIComponent(state.selectedDay)
-      );
+      loaded = await api('/api/entries?date=' + encodeURIComponent(wanted));
     } catch (err) {
-      $('day-detail-list').textContent = err.message;
+      if (state.selectedDay === wanted) $('day-detail-list').textContent = err.message;
       return;
     }
+    // Während des Ladens kann ein anderer Tag angeklickt worden sein – dessen
+    // Anzeige darf nicht mit diesen Daten überschrieben werden.
+    if (state.selectedDay !== wanted) return;
+    state.dayCache = loaded;
   }
   const entries = state.dayCache.entries;
   const total = entries.reduce((sum, e) => sum + e.kcal, 0);
@@ -594,10 +612,19 @@ async function saveSettings() {
         }),
       })
     );
-    $('settings-modal').hidden = true;
-    await refreshAll();
   } catch (err) {
     setMessage($('settings-msg'), err.message);
+    btn.disabled = false;
+    return;
+  }
+  // Erst schließen, wenn das Speichern geklappt hat – eine Fehlermeldung im
+  // zugeklappten Fenster würde niemand sehen. Fehler beim Neuladen danach
+  // gehören in die Hauptanzeige.
+  $('settings-modal').hidden = true;
+  try {
+    await refreshAll();
+  } catch (err) {
+    setMessage($('error-msg'), err.message);
   } finally {
     btn.disabled = false;
   }
