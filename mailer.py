@@ -31,12 +31,14 @@ def _port(raw: str, fallback: int) -> int:
 
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()
-SMTP_PORT = _port(os.environ.get("SMTP_PORT", ""), 587)
 SMTP_USER = os.environ.get("SMTP_USER", "").strip()
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", "").strip() or SMTP_USER
 # starttls (Standard, Port 587) | ssl (Port 465) | none
 SMTP_SECURITY = os.environ.get("SMTP_SECURITY", "starttls").strip().lower()
+# Ohne ausdrücklichen Port den zur Verschlüsselung passenden nehmen – 587 mit
+# SSL statt STARTTLS wäre sonst ein schwer zu deutender Verbindungsfehler.
+SMTP_PORT = _port(os.environ.get("SMTP_PORT", ""), 465 if SMTP_SECURITY == "ssl" else 587)
 APP_NAME = os.environ.get("APP_NAME", "Kalorien-Tagebuch")
 
 
