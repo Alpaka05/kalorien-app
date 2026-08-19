@@ -29,9 +29,12 @@ import auth
 import db
 import mailer
 from timeutil import (
+    calendar_date_of,
     date_range_iso,
     day_offset_iso,
     local_time_hhmm,
+    logical_date_of,
+    logical_today,
     today_iso,
     utc_now_iso,
 )
@@ -163,6 +166,19 @@ def require_user(view):
             conn.close()
 
     return wrapper
+
+
+def day_start(user) -> int:
+    """Persönlicher Tagesbeginn in Stunden (0 = Mitternacht)."""
+    try:
+        return int(user["day_start_hour"] or 0)
+    except (KeyError, IndexError, TypeError, ValueError):
+        return 0
+
+
+def user_today(user) -> str:
+    """Tag, dem "jetzt" für diese Person zugerechnet wird."""
+    return logical_today(day_start(user))
 
 
 def entry_json(row) -> dict:
@@ -306,6 +322,7 @@ def me():
             "display_name": user["display_name"],
             "kcal_goal": user["kcal_goal"],
             "protein_goal": user["protein_goal"],
+            "day_start_hour": day_start(user),
             "mail_configured": mailer.is_configured(),
         }
     )
@@ -333,21 +350,62 @@ def update_me():
             name = (payload["display_name"] or "").strip()[:60]
             fields.append("display_name = ?")
             values.append(name or None)
+        new_start = None
+        if "day_start_hour" in payload:
+            new_start = int(parse_number(payload["day_start_hour"], "Tagesbeginn", 0, 11))
+            fields.append("day_start_hour = ?")
+            values.append(new_start)
     except ValueError as exc:
         return bad(str(exc))
 
     if fields:
+        old_start = day_start(g.user)
         values.append(g.user["id"])
         g.conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values)
-        # Die Einschätzung basiert auf dem Ziel und ist damit veraltet.
+        moved = 0
+        if new_start is not None and new_start != old_start:
+            moved = rebucket_entries(g.conn, g.user["id"], old_start, new_start)
+        # Die Einschätzung basiert auf Ziel und Tageszuordnung, ist also veraltet.
         g.conn.execute("DELETE FROM coach_cache WHERE user_id = ?", (g.user["id"],))
         g.conn.commit()
 
     row = g.conn.execute(
-        "SELECT email, display_name, kcal_goal, protein_goal FROM users WHERE id = ?",
+        "SELECT email, display_name, kcal_goal, protein_goal, day_start_hour "
+        "FROM users WHERE id = ?",
         (g.user["id"],),
     ).fetchone()
-    return jsonify(dict(row))
+    result = dict(row)
+    result["day_start_hour"] = int(result["day_start_hour"] or 0)
+    result["moved_entries"] = moved if fields else 0
+    return jsonify(result)
+
+
+def rebucket_entries(conn, user_id: int, old_start: int, new_start: int) -> int:
+    """Bucht bestehende Einträge auf den neuen Tagesbeginn um.
+
+    Ohne das würde die Einstellung nur für neue Einträge gelten und der
+    Verlauf wäre eine Mischung aus zwei Zählweisen. Der echte Kalendertag
+    lässt sich aus dem gespeicherten Datum und der Uhrzeit eindeutig
+    zurückrechnen, solange der alte Tagesbeginn bekannt ist – die Umbuchung
+    ist damit exakt und durch Zurückstellen wieder umkehrbar.
+    """
+    rows = conn.execute(
+        "SELECT id, entry_date, entry_time FROM entries WHERE user_id = ?", (user_id,)
+    ).fetchall()
+    changes = []
+    for row in rows:
+        try:
+            calendar = calendar_date_of(row["entry_date"], row["entry_time"], old_start)
+            target = logical_date_of(calendar, row["entry_time"], new_start)
+        except (ValueError, TypeError):
+            continue
+        if target != row["entry_date"]:
+            changes.append((target, row["id"]))
+    if changes:
+        conn.executemany(
+            "UPDATE entries SET entry_date = ? WHERE id = ?", changes
+        )
+    return len(changes)
 
 
 # --------------------------------------------------------------------------
@@ -357,17 +415,26 @@ def update_me():
 @app.route("/api/entries", methods=["GET"])
 @require_user
 def list_entries():
+    start = day_start(g.user)
     try:
-        entry_date = parse_date(request.args.get("date") or today_iso())
+        entry_date = parse_date(request.args.get("date") or user_today(g.user))
     except ValueError as exc:
         return bad(str(exc))
+    # Bei einem Tagesbeginn von z. B. 04:00 gehört 01:30 chronologisch ans Ende
+    # des Tages, nicht an den Anfang – sonst steht der Nachtsnack ganz oben.
     rows = g.conn.execute(
         'SELECT id, entry_date, entry_time, "desc", kcal, protein FROM entries '
-        "WHERE user_id = ? AND entry_date = ? ORDER BY entry_time ASC, id ASC",
-        (g.user["id"], entry_date),
+        "WHERE user_id = ? AND entry_date = ? "
+        "ORDER BY CASE WHEN entry_time < ? THEN 1 ELSE 0 END, entry_time ASC, id ASC",
+        (g.user["id"], entry_date, f"{start:02d}:00"),
     ).fetchall()
     return jsonify(
-        {"date": entry_date, "entries": [entry_json(r) for r in rows]}
+        {
+            "date": entry_date,
+            "calendar_date": today_iso(),
+            "day_start_hour": start,
+            "entries": [entry_json(r) for r in rows],
+        }
     )
 
 
@@ -382,7 +449,9 @@ def add_entry():
         return bad("Die Beschreibung ist zu lang (maximal 500 Zeichen).")
 
     try:
-        entry_date = parse_date(payload["date"]) if payload.get("date") else today_iso()
+        entry_date = (
+            parse_date(payload["date"]) if payload.get("date") else user_today(g.user)
+        )
         entry_time = parse_time(payload["time"]) if payload.get("time") else local_time_hhmm()
         # Schnell-Eintrag aus den Favoriten: Werte sind bekannt, die KI wird
         # nicht gebraucht (spart Zeit und API-Kosten).
@@ -519,7 +588,11 @@ def summary():
     if days not in ALLOWED_RANGES:
         return bad(f"days muss einer dieser Werte sein: {', '.join(map(str, ALLOWED_RANGES))}.")
     try:
-        end = parse_date(request.args["end"]) if request.args.get("end") else today_iso()
+        end = (
+            parse_date(request.args["end"])
+            if request.args.get("end")
+            else user_today(g.user)
+        )
     except ValueError as exc:
         return bad(str(exc))
 
@@ -548,7 +621,9 @@ def summary():
         {
             "days": days,
             "end": end,
-            "today": today_iso(),
+            "today": user_today(g.user),
+            "calendar_date": today_iso(),
+            "day_start_hour": day_start(g.user),
             "kcal_goal": g.user["kcal_goal"],
             "protein_goal": g.user["protein_goal"],
             "series": result,
@@ -588,7 +663,9 @@ def add_weight():
     payload = body()
     try:
         kg = parse_number(payload.get("kg"), "Gewicht", 20, 400)
-        weigh_date = parse_date(payload["date"]) if payload.get("date") else today_iso()
+        weigh_date = (
+            parse_date(payload["date"]) if payload.get("date") else user_today(g.user)
+        )
     except ValueError as exc:
         return bad(str(exc))
     # Ein Wert pro Tag – ein zweiter Eintrag korrigiert den ersten.
@@ -619,7 +696,8 @@ def delete_weight(weight_id: int):
 # --------------------------------------------------------------------------
 
 def coach_inputs(conn, user) -> dict:
-    dates = date_range_iso(14)
+    start = day_start(user)
+    dates = date_range_iso(14, user_today(user))
     rows = conn.execute(
         "SELECT entry_date, COALESCE(SUM(kcal), 0) AS total, "
         "       COALESCE(SUM(protein), 0) AS protein, COUNT(*) AS entries, "
@@ -653,7 +731,8 @@ def coach_inputs(conn, user) -> dict:
     return {
         "ziel_kcal_pro_tag": user["kcal_goal"],
         "ziel_eiweiss_g_pro_tag": user["protein_goal"],
-        "heute": today_iso(),
+        "tagesbeginn_uhr": start,
+        "heute": user_today(user),
         "tage": days,
         "tage_mit_eintraegen": len(logged),
         "durchschnitt_kcal_erfasste_tage": (
@@ -706,7 +785,7 @@ def coach():
     inputs_hash = sha256(
         json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
-    day = today_iso()
+    day = user_today(user)
     if not force:
         cached = g.conn.execute(
             "SELECT payload FROM coach_cache WHERE user_id = ? AND day = ? "

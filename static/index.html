@@ -31,7 +31,7 @@
 
   <div class="cards">
     <div class="card">
-      <p class="card-label">Heute</p>
+      <p class="card-label">Heute<span id="today-hint"></span></p>
       <p class="card-value" id="today-total">0 kcal</p>
       <div class="goal-bar" id="today-bar" hidden><span style="width:0%"></span></div>
       <p class="card-note" id="today-note"></p>
@@ -105,6 +105,11 @@
     <div class="modal-field">
       <label class="field-label" for="protein-goal-input">Eiweißziel in Gramm (optional)</label>
       <input type="number" id="protein-goal-input" step="any" min="10" max="500" inputmode="numeric" />
+    </div>
+    <div class="modal-field">
+      <label class="field-label" for="day-start-input">Ein neuer Tag beginnt um</label>
+      <select id="day-start-input"></select>
+      <p class="modal-hint">Wenn du nach Mitternacht noch isst und es zum selben Tag zählen soll, stell hier z. B. 04:00 ein. Die Uhrzeit der Einträge bleibt die echte, nur die Tageszuordnung verschiebt sich – auch rückwirkend.</p>
     </div>
     <div class="modal-field">
       <label class="field-label" for="name-input">Anzeigename (optional)</label>

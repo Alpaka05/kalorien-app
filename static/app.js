@@ -8,6 +8,10 @@ const dateLong = (iso) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('de-DE', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+const dateShort = (iso) =>
+  new Date(iso + 'T00:00:00').toLocaleDateString('de-DE', {
+    day: 'numeric', month: 'long',
+  });
 // Bewusst nicht toISOString(): das rechnet auf UTC um und verschiebt das Datum
 // in unserer Zeitzone um einen Tag nach hinten.
 const isoLocal = (date) =>
@@ -93,6 +97,21 @@ async function loadToday() {
   renderToday();
 }
 
+function renderTodayHint() {
+  const data = state.today;
+  const hint = $('today-hint');
+  if (!data) return;
+  // Nach Mitternacht bei verschobenem Tagesbeginn ist "Heute" nicht der
+  // Kalendertag – ohne diesen Hinweis wirkt das wie ein Fehler.
+  if (data.calendar_date && data.date !== data.calendar_date) {
+    hint.textContent = ' · noch ' + dateShort(data.date);
+    hint.title = `Ein neuer Tag beginnt bei dir um ${String(data.day_start_hour).padStart(2, '0')}:00.`;
+  } else {
+    hint.textContent = '';
+    hint.removeAttribute('title');
+  }
+}
+
 function renderToday() {
   const list = $('today-list');
   const entries = state.today ? state.today.entries : [];
@@ -102,6 +121,7 @@ function renderToday() {
   const totalProtein = entries.reduce((sum, e) => sum + (e.protein || 0), 0);
   $('today-total').textContent = fmtKcal(totalKcal);
   renderGoalProgress(totalKcal, totalProtein);
+  renderTodayHint();
 
   if (!entries.length) {
     const empty = document.createElement('div');
@@ -589,9 +609,23 @@ async function loadMe() {
   $('settings-account').textContent = 'Angemeldet als ' + state.me.email;
 }
 
+function fillDayStartOptions() {
+  const select = $('day-start-input');
+  if (select.options.length) return;
+  for (let hour = 0; hour <= 11; hour++) {
+    const option = document.createElement('option');
+    option.value = String(hour);
+    option.textContent =
+      String(hour).padStart(2, '0') + ':00' + (hour === 0 ? ' (Mitternacht)' : '');
+    select.appendChild(option);
+  }
+}
+
 function openSettings() {
+  fillDayStartOptions();
   $('goal-input').value = state.me.kcal_goal ? Math.round(state.me.kcal_goal) : '';
   $('protein-goal-input').value = state.me.protein_goal ? Math.round(state.me.protein_goal) : '';
+  $('day-start-input').value = String(state.me.day_start_hour || 0);
   $('name-input').value = state.me.display_name || '';
   setMessage($('settings-msg'), '');
   $('settings-modal').hidden = false;
@@ -608,6 +642,7 @@ async function saveSettings() {
         body: JSON.stringify({
           kcal_goal: $('goal-input').value.trim() || null,
           protein_goal: $('protein-goal-input').value.trim() || null,
+          day_start_hour: $('day-start-input').value,
           display_name: $('name-input').value.trim(),
         }),
       })
@@ -621,12 +656,20 @@ async function saveSettings() {
   // zugeklappten Fenster würde niemand sehen. Fehler beim Neuladen danach
   // gehören in die Hauptanzeige.
   $('settings-modal').hidden = true;
+  const moved = state.me.moved_entries || 0;
   try {
     await refreshAll();
   } catch (err) {
     setMessage($('error-msg'), err.message);
   } finally {
     btn.disabled = false;
+  }
+  if (moved) {
+    setMessage(
+      $('error-msg'),
+      `${moved} ${moved === 1 ? 'Eintrag wurde' : 'Einträge wurden'} auf den neuen Tagesbeginn umgebucht.`,
+      'ok'
+    );
   }
 }
 

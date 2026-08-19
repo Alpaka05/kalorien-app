@@ -43,6 +43,14 @@ input[type="text"], input[type="email"], input[type="number"], input[type="time"
 }
 input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
 input[type="number"] { font-family: var(--mono); }
+select {
+  height: 44px; padding: 0 12px; width: 100%;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface); font-size: 15px; color: var(--text-primary);
+  font-family: var(--sans); outline: none; cursor: pointer;
+}
+select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+#today-hint { color: var(--text-muted); font-weight: 400; }
 
 button {
   height: 44px; padding: 0 18px; border: none; border-radius: var(--radius);
