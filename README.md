@@ -60,8 +60,41 @@ erfolgreichen Code wird automatisch ein Konto angelegt.
 docker compose logs --tail=30 kalorien-tagebuch
 ```
 
-Für echten Mailversand die `SMTP_*`-Variablen in der `.env` setzen. Damit
-bekommt jede Person ihren Code selbst und du musst nicht ins Log schauen.
+### Code per E-Mail verschicken
+
+Damit jede Person ihren Code selbst bekommt, brauchst du einen SMTP-Zugang.
+Die App verschickt selbst keine Mails über die eigene IP – das würde in
+Spam-Ordnern landen –, sondern über den Postausgangsserver deines
+Mail-Anbieters. Trag die Daten in die `.env` ein und starte neu:
+
+```bash
+docker compose up -d
+```
+
+**Gmail** (braucht aktivierte Zwei-Faktor-Anmeldung, dann unter
+myaccount.google.com/apppasswords ein App-Passwort erzeugen – nicht das
+normale Google-Passwort verwenden):
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURITY=starttls
+SMTP_USER=deine-adresse@gmail.com
+SMTP_PASSWORD=das-16-stellige-app-passwort
+SMTP_FROM=deine-adresse@gmail.com
+```
+
+**Anderer Anbieter:** Such in dessen Hilfe nach „SMTP" oder
+„Postausgangsserver". Meist ist es `smtp.<anbieter>.de`, Port `587` mit
+`SMTP_SECURITY=starttls` oder Port `465` mit `SMTP_SECURITY=ssl`. Den Port
+kannst du weglassen, dann wird der zur Verschlüsselung passende genommen.
+
+Bei den meisten Anbietern muss `SMTP_FROM` dieselbe Adresse sein wie
+`SMTP_USER`, sonst wird der Versand abgelehnt.
+
+Klappt der Versand nicht, steht der Grund im Log
+(`docker compose logs kalorien-tagebuch`) – der Code selbst wird dabei nie
+in einer Fehlermeldung nach außen gegeben.
 
 ### Wer darf sich registrieren?
 
