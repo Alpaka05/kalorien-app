@@ -21,7 +21,6 @@ from flask import (
     jsonify,
     redirect,
     request,
-    send_from_directory,
 )
 
 import ai
@@ -192,6 +191,45 @@ def entry_json(row) -> dict:
     }
 
 
+# --------------------------------------------------------------------------
+# HTML ausliefern (mit Versionsstempel an CSS und JS)
+# --------------------------------------------------------------------------
+
+ASSET_FILES = ("styles.css", "app.js", "login.js")
+_page_cache: dict[str, tuple[str, str]] = {}
+
+
+def asset_version() -> str:
+    """Kennung, die sich bei jeder Änderung an CSS oder JS ändert.
+
+    Sie hängt als ?v=… an den Verweisen. Ohne sie kann ein Browser oder ein
+    Zwischenspeicher wie Cloudflare nach einem Update noch die alte Datei
+    ausliefern – die Seite sieht dann kaputt aus, obwohl der Server längst
+    die neue Fassung hat.
+    """
+    newest = 0
+    for name in ASSET_FILES:
+        try:
+            newest = max(newest, int(os.path.getmtime(os.path.join(app.static_folder, name))))
+        except OSError:
+            continue
+    return str(newest)
+
+
+def render_page(name: str) -> Response:
+    version = asset_version()
+    cached = _page_cache.get(name)
+    if not cached or cached[0] != version:
+        with open(os.path.join(app.static_folder, name), encoding="utf-8") as fh:
+            html = fh.read().replace("__ASSET_V__", version)
+        _page_cache[name] = (version, html)
+    response = Response(_page_cache[name][1], mimetype="text/html")
+    # Die Seite selbst trägt die Version, darf also nie aus dem Zwischenspeicher
+    # kommen – sonst zeigt sie auf eine veraltete Version.
+    response.headers["Cache-Control"] = "no-store, must-revalidate"
+    return response
+
+
 @app.errorhandler(Exception)
 def handle_unexpected(exc: Exception):
     """Auf /api/* immer JSON zurückgeben – das Frontend parst nur JSON."""
@@ -231,12 +269,12 @@ def index():
         conn.close()
     if not user:
         return redirect("/login", code=302)
-    return send_from_directory(app.static_folder, "index.html")
+    return render_page("index.html")
 
 
 @app.route("/login")
 def login_page():
-    return send_from_directory(app.static_folder, "login.html")
+    return render_page("login.html")
 
 
 @app.route("/healthz")

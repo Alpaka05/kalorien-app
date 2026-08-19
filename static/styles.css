@@ -43,13 +43,43 @@ input[type="text"], input[type="email"], input[type="number"], input[type="time"
 }
 input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
 input[type="number"] { font-family: var(--mono); }
+/* appearance:none ist hier nicht Kosmetik: mit der Standarddarstellung
+   ignorieren manche Browser (u. a. Safari) die Hoehe, das Feld bleibt dann
+   winzig und der Text wird abgeschnitten. Der Pfeil wird deshalb selbst
+   gezeichnet. */
 select {
-  height: 44px; padding: 0 12px; width: 100%;
-  border: 1px solid var(--border-strong); border-radius: var(--radius);
-  background: var(--surface); font-size: 15px; color: var(--text-primary);
-  font-family: var(--sans); outline: none; cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  height: 44px;
+  min-height: 44px;
+  width: 100%;
+  margin: 0;
+  padding: 0 38px 0 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%236B6656' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 12px 8px;
+  font-size: 15px;
+  font-family: var(--sans);
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  text-overflow: ellipsis;
 }
+select::-ms-expand { display: none; }
 select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+/* Ohne diese Angaben erbt die aufgeklappte Liste in manchen Browsern die
+   Farben des Betriebssystems und wird unleserlich. */
+select option {
+  background-color: var(--surface);
+  color: var(--text-primary);
+  font-size: 15px;
+}
 #today-hint { color: var(--text-muted); font-weight: 400; }
 
 button {
