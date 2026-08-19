@@ -133,16 +133,18 @@ bleiben erhalten.
 ## Kosten und Modellwahl
 
 Die einzigen laufenden Kosten sind Anthropic-API-Aufrufe. Standardmäßig läuft die
-App auf `claude-opus-5` – das liefert die besten Schätzungen, ist aber das
-teuerste Modell. Wer sparen will, setzt in der `.env`:
+App auf `claude-haiku-4-5` – dem günstigsten Modell, das für Kalorienschätzungen
+in der Praxis gut ausreicht. Bei privater Nutzung liegt das im Bereich von
+Cent-Beträgen pro Monat.
+
+Wenn die Schätzungen genauer werden sollen, in der `.env`:
 
 ```
-ANTHROPIC_MODEL=claude-haiku-4-5
+ANTHROPIC_MODEL=claude-sonnet-5
 ```
 
-Für Kalorienschätzungen reicht das in der Praxis gut und kostet nur einen
-Bruchteil. Ein Aufruf entsteht pro neuem Freitext-Eintrag und einmal täglich für
-die Einschätzung; Schnell-Einträge über die Chips kosten nichts.
+Ein Aufruf entsteht pro neuem Freitext-Eintrag und einmal täglich für die
+Einschätzung; Schnell-Einträge über die Chips kosten nichts.
 
 ## Konfiguration
 
@@ -152,7 +154,7 @@ wichtigsten:
 | Variable | Standard | Bedeutung |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | – | Pflicht |
-| `ANTHROPIC_MODEL` | `claude-opus-5` | Modell für Schätzung und Einschätzung |
+| `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Modell für Schätzung und Einschätzung |
 | `APP_TZ` | `Europe/Berlin` | Zeitzone für Datum und Uhrzeit der Einträge |
 | `COOKIE_SECURE` | automatisch | Richtet sich nach HTTP/HTTPS; nur zum Überschreiben |
 | `SECRET_KEY` | automatisch | Ändern macht alle Anmeldungen ungültig |

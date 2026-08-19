@@ -137,9 +137,18 @@ button.link:hover:not(:disabled) { background: none; color: var(--accent); }
   cursor: pointer; min-width: 0;
 }
 .week-col:hover .week-bar { background: var(--accent-dark); }
-.week-bar { width: 100%; max-width: 34px; border-radius: 4px 4px 0 0; background: var(--border-strong); }
+/* Die Spalte ist ein Button über die volle Diagrammhöhe. Ohne diese Regel
+   zeichnet der Browser seinen Fokusring um die ganze Spalte – hervorgehoben
+   werden soll aber nur die Säule selbst. */
+.week-col:focus { outline: none; }
+.week-col:focus-visible .week-bar { outline: 2px solid var(--accent); outline-offset: 2px; }
+.week-bar {
+  width: 100%; max-width: 34px; border-radius: 4px 4px 0 0;
+  background: var(--border-strong); transition: background 0.12s ease;
+}
 .week-bar.reached { background: var(--accent); }
-.week-bar.today { outline: 2px solid var(--accent-dark); outline-offset: 1px; }
+/* Heute nur dezent markieren, damit es der Auswahl nicht die Show stiehlt. */
+.week-bar.today { box-shadow: inset 0 0 0 1px var(--accent-dark); }
 .week-col.selected .week-bar { background: var(--accent-dark); }
 .week-total { font-size: 10px; font-family: var(--mono); color: var(--text-secondary); min-height: 12px; }
 .week-label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
