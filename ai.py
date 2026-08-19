@@ -13,7 +13,10 @@ import anthropic
 
 log = logging.getLogger("kalorien.ai")
 
-ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5").strip()
+# Haiku als Standard: für Kalorienschätzungen reicht es und es ist das
+# günstigste Modell. Über ANTHROPIC_MODEL umstellbar, z. B. auf claude-sonnet-5
+# oder claude-opus-5, wenn die Schätzungen besser werden sollen.
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5").strip()
 
 # Der effort-Parameter existiert nicht auf jedem Modell – Haiku 4.5, Sonnet 4.5
 # und die 3er-Reihe lehnen ihn mit HTTP 400 ab. Er wird deshalb nur gesendet,
