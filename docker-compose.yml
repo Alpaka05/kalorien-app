@@ -5,8 +5,10 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
+    env_file:
+      - .env
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ANTHROPIC_MODEL=claude-sonnet-4-6
+      # Zeitzone für Datum und Uhrzeit der Einträge
+      - APP_TZ=${APP_TZ:-Europe/Berlin}
     volumes:
       - ./data:/app/data

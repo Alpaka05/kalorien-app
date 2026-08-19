@@ -1,59 +1,175 @@
 # Kalorien-Tagebuch – Self-Hosted
 
-Kleine Web-App mit SQLite-Datenbank. Alle Geräte, die die Seite über deine Domain
-öffnen, sehen dieselben Daten – kein Login nötig, kein externer Dienst außer der
-Anthropic-API für die Kalorienschätzung.
+Kleine Web-App zum Kalorienzählen mit Fokus aufs **Zunehmen**: Du schreibst in
+normaler Sprache hin, was du gegessen hast, Claude schätzt Kalorien und Eiweiß,
+und die App zeigt dir, wie nah du an deinem Tagesziel bist.
+
+Läuft komplett auf dem eigenen Server. Außer der Anthropic-API für die
+Schätzungen wird kein externer Dienst gebraucht.
+
+## Funktionen
+
+- **Freitext-Eingabe** – „2 Scheiben Toast mit Butter" reicht, kcal und Eiweiß
+  werden geschätzt und lassen sich nachträglich korrigieren
+- **Konten mit E-Mail-Code** – mehrere Personen parallel, jede sieht nur ihre
+  eigenen Daten, kein Passwort nötig
+- **Tagesziel** mit Fortschrittsbalken und „noch X kcal bis …"
+- **KI-Einschätzung** – bewertet die letzten 14 Tage gegenüber dem Ziel und sagt,
+  wo du nachgelassen hast (auf Zunehmen ausgelegt)
+- **Verlauf** – 7, 14 oder 30 Tage, beliebig weiter zurückblätterbar; ein Klick
+  auf einen Balken zeigt, was an dem Tag wann gegessen wurde
+- **Schnell-Eintrag** – häufige Mahlzeiten als Chips, ein Tap genügt (ohne
+  neuen API-Aufruf)
+- **Gewichts-Tracking** mit Trend über 30 Tage
+- **CSV-Export** aller Einträge
 
 ## 1. Voraussetzungen
 
-- Docker + Docker Compose auf dem Zielrechner (z. B. eine LXC/VM in deinem Proxmox-Home-Lab)
+- Docker + Docker Compose auf dem Zielrechner (z. B. eine LXC/VM im Proxmox-Home-Lab)
 - Ein Anthropic API-Key: https://console.anthropic.com/settings/keys
-- Deine Domain `alpaka.yt` (oder eine Subdomain wie `kalorien.alpaka.yt`), die per DNS
-  auf die öffentliche IP deines Home Labs zeigt
+- Eine Domain oder Subdomain, die auf den Server zeigt (siehe Schritt 4)
+
+Für einen unprivilegierten LXC-Container in Proxmox muss unter
+*Options → Features* **Nesting** aktiviert sein, sonst startet Docker nicht.
 
 ## 2. App starten
 
 ```bash
 cp .env.example .env
-# .env öffnen und ANTHROPIC_API_KEY eintragen
+# .env öffnen und mindestens ANTHROPIC_API_KEY eintragen
 
 docker compose up -d --build
 ```
 
-Die App läuft danach lokal auf Port 5000 (`http://<server-ip>:5000`).
+Die App läuft danach auf Port 5000 (`http://<server-ip>:5000`).
 Die Datenbank liegt persistent unter `./data/kalorien.db` – Container-Neustarts
-oder Updates löschen deine Einträge also nicht.
+und Updates löschen deine Einträge nicht.
 
-## 3. Über alpaka.yt erreichbar machen
+> Die Datei `.env` muss existieren, bevor `docker compose up` läuft – sonst
+> bricht Compose mit einer Fehlermeldung ab.
 
-Am einfachsten mit einem Reverse Proxy, der auch gleich automatisch HTTPS-Zertifikate
-holt. Zwei gängige Optionen für ein Home Lab:
+## 3. Anmeldung und Konten
 
-### Option A: Nginx Proxy Manager (Weboberfläche, gut wenn du schon einen für Home Assistant nutzt)
-1. Neuer Proxy Host → Domain: `kalorien.alpaka.yt`
-2. Forward Hostname/IP: IP des Containers/Hosts, Port `5000`
-3. SSL-Tab: Let's Encrypt-Zertifikat anfordern, "Force SSL" aktivieren
+Beim Aufruf der Seite landest du auf `/login`. Dort gibst du deine
+E-Mail-Adresse ein und bekommst einen 6-stelligen Code. Beim ersten
+erfolgreichen Code wird automatisch ein Konto angelegt.
 
-### Option B: Caddy (eine Zeile Konfiguration)
+**Ohne konfigurierten Mailserver** steht der Code im Container-Log:
+
+```bash
+docker compose logs --tail=30 kalorien-tagebuch
 ```
-kalorien.alpaka.yt {
+
+Für echten Mailversand die `SMTP_*`-Variablen in der `.env` setzen. Damit
+bekommt jede Person ihren Code selbst und du musst nicht ins Log schauen.
+
+### Wer darf sich registrieren?
+
+Standardmäßig darf sich nur das **erste** Konto anlegen – deins. Danach ist die
+Registrierung zu. Das ist Absicht: Die App ist meist öffentlich erreichbar, und
+ein fremdes Konto würde deine Anthropic-Kosten verursachen.
+
+Weitere Personen schaltest du in der `.env` frei (deine Adresse mit aufführen):
+
+```
+ALLOWED_EMAILS=du@example.com,partnerin@example.com
+```
+
+Wer die Registrierung wirklich für alle offen haben will, setzt
+`REGISTRATION_OPEN=true` – sinnvoll nur mit einem Zugriffsschutz davor,
+etwa Cloudflare Access.
+
+Hattest du die App vorher schon ohne Konten benutzt, übernimmt das erste
+registrierte Konto alle bestehenden Einträge. Melde dich also selbst als Erste
+an, bevor du anderen den Link gibst.
+
+## 4. Über die eigene Domain erreichbar machen
+
+### Variante A: Cloudflare Tunnel (kein Port-Forwarding nötig)
+
+Wenn schon ein `cloudflared`-Tunnel läuft – etwa als Home-Assistant-Add-on –
+reicht ein zusätzlicher Eintrag in dessen Konfiguration:
+
+```yaml
+- hostname: kcal.deine-domain.tld
+  service: http://192.168.2.114:5000
+```
+
+Wichtig: **kein Schrägstrich am Ende** der `service`-URL, sonst verweigert
+cloudflared den Start mit `ingress rules don't support proxying to a different path`.
+
+Danach das Add-on neu starten und bei Cloudflare unter **DNS → Add record** einen
+Eintrag vom Typ **Tunnel** für `kcal` auf denselben Tunnel anlegen.
+
+Privat halten geht am einfachsten über **Cloudflare Access** (Zero-Trust-Dashboard
+→ Access → Applications → Self-hosted → Public DNS): dann fragt Cloudflare vor
+der App nach einer freigegebenen E-Mail-Adresse.
+
+### Variante B: Reverse Proxy mit Port-Forwarding
+
+Alternativ ein Reverse Proxy wie Nginx Proxy Manager oder Caddy, Ports 80/443
+im Router weitergeleitet, Let's-Encrypt-Zertifikat über den Proxy:
+
+```
+kcal.deine-domain.tld {
     reverse_proxy localhost:5000
 }
 ```
-Caddy holt sich das Zertifikat automatisch.
 
-### DNS
-Bei deinem Domain-Provider einen A-Record (oder CNAME) für
-`kalorien.alpaka.yt` auf deine öffentliche IP anlegen. Falls sich deine IP
-ändert (kein statisches IP), lohnt sich zusätzlich ein Dyn-DNS-Client.
+Das Secure-Flag am Session-Cookie setzt die App automatisch passend zum
+Aufrufweg – die Anmeldung funktioniert also sowohl über `https://…` als auch
+über `http://<server-ip>:5000` im LAN, ohne dass du etwas konfigurieren musst.
 
-## 4. Nutzung
+## 5. Updates einspielen
 
-Einfach `https://kalorien.alpaka.yt` auf jedem Gerät öffnen – Handy, Laptop, etc.
-Alle sehen dieselben Einträge, weil die Daten zentral auf deinem Server liegen.
+```bash
+git pull
+docker compose up -d --build
+```
 
-## Kosten
+Schema-Änderungen werden beim Start automatisch angewendet, bestehende Daten
+bleiben erhalten.
 
-Die einzigen laufenden Kosten sind die Anthropic-API-Aufrufe für die Kalorienschätzung
-(Claude Sonnet). Bei privater Nutzung (ein paar Einträge täglich) liegt das im Bereich
-von Cent-Beträgen pro Monat.
+## Kosten und Modellwahl
+
+Die einzigen laufenden Kosten sind Anthropic-API-Aufrufe. Standardmäßig läuft die
+App auf `claude-opus-5` – das liefert die besten Schätzungen, ist aber das
+teuerste Modell. Wer sparen will, setzt in der `.env`:
+
+```
+ANTHROPIC_MODEL=claude-haiku-4-5
+```
+
+Für Kalorienschätzungen reicht das in der Praxis gut und kostet nur einen
+Bruchteil. Ein Aufruf entsteht pro neuem Freitext-Eintrag und einmal täglich für
+die Einschätzung; Schnell-Einträge über die Chips kosten nichts.
+
+## Konfiguration
+
+Alle Variablen sind in [`.env.example`](.env.example) dokumentiert. Die
+wichtigsten:
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | – | Pflicht |
+| `ANTHROPIC_MODEL` | `claude-opus-5` | Modell für Schätzung und Einschätzung |
+| `APP_TZ` | `Europe/Berlin` | Zeitzone für Datum und Uhrzeit der Einträge |
+| `COOKIE_SECURE` | automatisch | Richtet sich nach HTTP/HTTPS; nur zum Überschreiben |
+| `SECRET_KEY` | automatisch | Ändern macht alle Anmeldungen ungültig |
+| `ALLOWED_EMAILS` | leer | Kommaliste freigegebener Adressen |
+| `REGISTRATION_OPEN` | leer | `true` = jede Adresse darf sich registrieren |
+| `SMTP_*` | leer | Ohne Angabe steht der Anmeldecode im Log |
+
+## Hinweise
+
+Kalorienangaben sind Schätzungen auf Basis üblicher Portionsgrößen, keine exakte
+Nährwertanalyse. Die KI-Einschätzung ist keine medizinische Beratung.
+
+## Backup
+
+Es reicht, den Ordner `data/` zu sichern – dort liegen Datenbank und
+Session-Schlüssel:
+
+```bash
+tar czf kalorien-backup-$(date +%F).tar.gz data/
+```
