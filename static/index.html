@@ -83,7 +83,11 @@
     <p class="section-sub" id="weight-trend"></p>
   </div>
   <div class="weight-row">
-    <input type="number" id="weight-input" placeholder="z. B. 68.5" step="any" min="20" max="400" inputmode="decimal" />
+    <!-- Absichtlich type="text": bei type="number" verwirft Safari eine Eingabe
+         mit Komma ("68,5") intern, das Feld zeigt sie noch, der Wert ist aber
+         leer. inputmode sorgt weiterhin für die Zifferntastatur. -->
+    <input type="text" id="weight-input" placeholder="z. B. 68,5" inputmode="decimal"
+           autocomplete="off" maxlength="6" />
     <button id="weight-btn" class="ghost">Eintragen</button>
   </div>
   <p class="message" id="weight-msg"></p>

@@ -137,6 +137,10 @@ def parse_time(value) -> str:
 
 
 def parse_number(value, field: str, lo: float, hi: float) -> float:
+    # Deutsche Eingaben kommen mit Komma als Dezimaltrennzeichen; das Frontend
+    # rechnet es um, hier steht es als Sicherheitsnetz.
+    if isinstance(value, str):
+        value = value.strip().replace(",", ".")
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -195,37 +199,58 @@ def entry_json(row) -> dict:
 # HTML ausliefern (mit Versionsstempel an CSS und JS)
 # --------------------------------------------------------------------------
 
-ASSET_FILES = ("styles.css", "app.js", "login.js")
-_page_cache: dict[str, tuple[str, str]] = {}
+# Verweise der Form /datei.css?v=__ASSET_V__ bekommen je Datei ihre eigene
+# Kennung. Ein gemeinsamer Zeitstempel über alle Dateien wäre zu grob: ändert
+# sich das CSS, während das JS schon neuer ist, bliebe das Maximum gleich und
+# die alte CSS würde weiter aus dem Zwischenspeicher kommen.
+_ASSET_REF = re.compile(r"(?P<path>/(?P<name>[\w.-]+\.(?:css|js)))\?v=__ASSET_V__")
+_asset_tokens: dict[str, tuple[tuple[float, int], str]] = {}
 
 
-def asset_version() -> str:
-    """Kennung, die sich bei jeder Änderung an CSS oder JS ändert.
+def asset_token(name: str) -> str:
+    """Kurzer Hash über den Inhalt einer statischen Datei.
 
-    Sie hängt als ?v=… an den Verweisen. Ohne sie kann ein Browser oder ein
-    Zwischenspeicher wie Cloudflare nach einem Update noch die alte Datei
-    ausliefern – die Seite sieht dann kaputt aus, obwohl der Server längst
-    die neue Fassung hat.
+    Der Hash statt der Änderungszeit, weil Zeitstempel unzuverlässig sind:
+    ein Wiederherstellen aus einem Archiv, eine zurückgestellte Uhr oder zwei
+    Änderungen in derselben Sekunde würden sonst dieselbe Kennung ergeben und
+    die alte Datei bliebe im Zwischenspeicher hängen.
     """
-    newest = 0
-    for name in ASSET_FILES:
-        try:
-            newest = max(newest, int(os.path.getmtime(os.path.join(app.static_folder, name))))
-        except OSError:
-            continue
-    return str(newest)
+    path = os.path.join(app.static_folder, name)
+    try:
+        info = os.stat(path)
+    except OSError:
+        return "0"
+    signature = (info.st_mtime, info.st_size)
+    cached = _asset_tokens.get(name)
+    if cached and cached[0] == signature:
+        return cached[1]
+    try:
+        with open(path, "rb") as fh:
+            token = sha256(fh.read()).hexdigest()[:10]
+    except OSError:
+        return "0"
+    _asset_tokens[name] = (signature, token)
+    return token
 
 
 def render_page(name: str) -> Response:
-    version = asset_version()
-    cached = _page_cache.get(name)
-    if not cached or cached[0] != version:
-        with open(os.path.join(app.static_folder, name), encoding="utf-8") as fh:
-            html = fh.read().replace("__ASSET_V__", version)
-        _page_cache[name] = (version, html)
-    response = Response(_page_cache[name][1], mimetype="text/html")
-    # Die Seite selbst trägt die Version, darf also nie aus dem Zwischenspeicher
-    # kommen – sonst zeigt sie auf eine veraltete Version.
+    path = os.path.join(app.static_folder, name)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            html = fh.read()
+    except OSError:
+        log.error("Seitenvorlage %s fehlt oder ist nicht lesbar", name)
+        return Response(
+            "Die Seite ist nicht verfügbar. Bitte im Container-Log nachsehen.",
+            status=500,
+            mimetype="text/plain",
+        )
+    html = _ASSET_REF.sub(
+        lambda m: f"{m.group('path')}?v={asset_token(m.group('name'))}", html
+    )
+    response = Response(html, mimetype="text/html")
+    # Die Seite selbst trägt die Kennungen, darf also nie aus dem
+    # Zwischenspeicher kommen – sonst verweist sie auf veraltete Dateien.
     response.headers["Cache-Control"] = "no-store, must-revalidate"
     return response
 

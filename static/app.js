@@ -211,10 +211,10 @@ function buildEditForm(entry) {
   const grid = document.createElement('div');
   grid.className = 'edit-grid';
   const fields = [
-    { key: 'kcal', label: 'kcal', value: Math.round(entry.kcal), step: 'any', min: '0' },
+    { key: 'kcal', label: 'kcal', value: Math.round(entry.kcal) },
     {
       key: 'protein', label: 'Eiweiß (g)',
-      value: entry.protein == null ? '' : Math.round(entry.protein), step: 'any', min: '0',
+      value: entry.protein == null ? '' : Math.round(entry.protein),
     },
   ];
   const inputs = {};
@@ -224,11 +224,14 @@ function buildEditForm(entry) {
     label.className = 'field-label';
     label.textContent = field.label;
     const input = document.createElement('input');
-    input.type = 'number';
+    // type="text" statt "number": Safari verwirft bei type="number" eine
+    // Eingabe mit Komma intern, das Feld zeigt sie noch, der Wert ist leer –
+    // beim Eiweiß hätte das den Wert stillschweigend gelöscht.
+    input.type = 'text';
     input.value = field.value;
-    input.step = field.step;
-    input.min = field.min;
-    input.inputMode = 'numeric';
+    input.inputMode = 'decimal';
+    input.autocomplete = 'off';
+    input.maxLength = 7;
     wrap.append(label, input);
     grid.appendChild(wrap);
     inputs[field.key] = input;
@@ -267,8 +270,8 @@ function buildEditForm(entry) {
         method: 'PATCH',
         body: JSON.stringify({
           desc: descInput.value.trim(),
-          kcal: inputs.kcal.value,
-          protein: inputs.protein.value === '' ? null : inputs.protein.value,
+          kcal: normalizeNumber(inputs.kcal.value),
+          protein: normalizeNumber(inputs.protein.value) || null,
           time: timeInput.value,
         }),
       });
@@ -392,12 +395,18 @@ function renderSummary() {
   // staucht Flexbox die hohen Balken auf dieselbe Höhe.
   const chartHeight = 103;
   const barBaseline = 20; // Abstand Balkenunterkante zum Diagrammboden
-  // Bei vielen Tagen frisst der Abstand die Balkenbreite auf – auf dem Handy
-  // bleiben sonst 5 px übrig, die man nicht treffen kann. Zahlen über den
-  // Balken und jedes Datum würden sich dort ebenfalls überlappen.
-  const dense = data.series.length > 14;
+  // Ob Zahlen und Datumsangaben Platz haben, hängt nicht an der Anzahl der
+  // Tage, sondern an der Breite pro Spalte: 14 Tage sind auf dem Handy zu eng
+  // (18 px Spalte gegen 27 px Zahl), auf dem Desktop reichlich. Deshalb hier
+  // ausrechnen statt eine feste Grenze zu raten.
+  const columns = data.series.length;
+  const chartWidth = chart.getBoundingClientRect().width || 335;
+  const widthPerColumn = (gap) => (chartWidth - (columns - 1) * gap) / columns;
+  const dense = widthPerColumn(6) < 28; // Platz für die Zahl über dem Balken?
   chart.style.gap = dense ? '2px' : '6px';
-  const labelEvery = dense ? 5 : 1;
+  const perColumn = widthPerColumn(dense ? 2 : 6);
+  // Kleinster Abstand, bei dem die Datumsangaben nicht zusammenlaufen.
+  const labelEvery = [1, 2, 5].find((n) => n * perColumn >= 20) || 5;
 
   if (goal) {
     const line = document.createElement('div');
@@ -540,9 +549,12 @@ async function loadWeights() {
   trend.textContent = text;
 }
 
+// Deutsche Eingabe mit Komma in das Format bringen, das die API erwartet.
+const normalizeNumber = (raw) => String(raw ?? '').trim().replace(',', '.');
+
 async function saveWeight() {
   const input = $('weight-input');
-  const value = input.value.trim();
+  const value = normalizeNumber(input.value);
   if (!value) {
     setMessage($('weight-msg'), 'Bitte gib dein Gewicht in kg ein.');
     return;
