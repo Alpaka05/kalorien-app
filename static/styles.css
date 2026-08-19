@@ -268,4 +268,8 @@ button.link:hover:not(:disabled) { background: none; color: var(--accent); }
   .cards { grid-template-columns: 1fr; }
   .edit-grid { grid-template-columns: 1fr 1fr; }
   .week-label { font-size: 10px; }
+  /* Mindestens 16px: darunter zoomt iOS Safari beim Antippen in die Seite
+     hinein und zoomt danach nicht zurück. Die Höhen bleiben unberührt. */
+  input[type="text"], input[type="email"], input[type="number"],
+  input[type="time"], input[type="date"], select { font-size: 16px; }
 }
