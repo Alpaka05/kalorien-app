@@ -34,7 +34,42 @@ def now_local() -> datetime:
 
 
 def today_iso() -> str:
+    """Kalendertag nach der Uhr (ohne persönlichen Tagesbeginn)."""
     return now_local().date().isoformat()
+
+
+def logical_today(day_start_hour: int = 0) -> str:
+    """Tag, dem "jetzt" zugerechnet wird.
+
+    Bei einem Tagesbeginn von z. B. 4 gehört alles vor 04:00 noch zum Vortag –
+    wer um 01:30 nachts isst, bucht es damit auf den Tag, an dem er wach
+    geworden ist, statt auf den neuen Kalendertag.
+    """
+    now = now_local()
+    if day_start_hour and now.hour < day_start_hour:
+        return (now.date() - timedelta(days=1)).isoformat()
+    return now.date().isoformat()
+
+
+def logical_date_of(entry_date: str, entry_time: str, day_start_hour: int) -> str:
+    """Rechnet einen gespeicherten Eintrag auf einen anderen Tagesbeginn um.
+
+    Aus Datum und Uhrzeit lässt sich der echte Kalendertag eindeutig
+    zurückrechnen, solange der alte Tagesbeginn bekannt ist. Damit ist die
+    Umbuchung beim Ändern der Einstellung exakt und umkehrbar.
+    """
+    calendar = date.fromisoformat(entry_date)
+    if day_start_hour and int(entry_time[:2]) < day_start_hour:
+        return (calendar - timedelta(days=1)).isoformat()
+    return calendar.isoformat()
+
+
+def calendar_date_of(entry_date: str, entry_time: str, day_start_hour: int) -> str:
+    """Echter Kalendertag eines Eintrags, der unter `day_start_hour` gebucht wurde."""
+    calendar = date.fromisoformat(entry_date)
+    if day_start_hour and int(entry_time[:2]) < day_start_hour:
+        calendar += timedelta(days=1)
+    return calendar.isoformat()
 
 
 def local_time_hhmm() -> str:

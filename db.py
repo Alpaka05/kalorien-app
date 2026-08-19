@@ -13,12 +13,15 @@ DB_PATH = os.environ.get("DB_PATH") or os.path.join(APP_DIR, "data", "kalorien.d
 
 TABLES = """
 CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    email         TEXT NOT NULL UNIQUE,
-    display_name  TEXT,
-    kcal_goal     REAL,
-    protein_goal  REAL,
-    created_at    TEXT NOT NULL
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    email           TEXT NOT NULL UNIQUE,
+    display_name    TEXT,
+    kcal_goal       REAL,
+    protein_goal    REAL,
+    -- Stunde, ab der ein neuer Tag zählt. 0 = Mitternacht, 4 = alles vor
+    -- 04:00 gehört noch zum Vortag (für späte Esser).
+    day_start_hour  INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS entries (
@@ -142,6 +145,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE entries ADD COLUMN user_id INTEGER")
         if "protein" not in entry_cols:
             conn.execute("ALTER TABLE entries ADD COLUMN protein REAL")
+        if "day_start_hour" not in _columns(conn, "users"):
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN day_start_hour INTEGER NOT NULL DEFAULT 0"
+            )
         conn.commit()
         conn.executescript(INDEXES)
         conn.commit()
