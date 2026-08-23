@@ -639,6 +639,7 @@ function openSettings() {
   $('protein-goal-input').value = state.me.protein_goal ? Math.round(state.me.protein_goal) : '';
   $('day-start-input').value = String(state.me.day_start_hour || 0);
   $('name-input').value = state.me.display_name || '';
+  $('theme-input').value = Theme.get();
   setMessage($('settings-msg'), '');
   $('settings-modal').hidden = false;
 }
@@ -724,6 +725,9 @@ $('settings-btn').addEventListener('click', openSettings);
 $('settings-close').addEventListener('click', () => ($('settings-modal').hidden = true));
 $('settings-cancel').addEventListener('click', () => ($('settings-modal').hidden = true));
 $('settings-save').addEventListener('click', saveSettings);
+// Das Farbschema liegt im localStorage, nicht im Konto: es wirkt sofort und
+// gehoert deshalb nicht in die PATCH-Nutzlast von "Speichern".
+$('theme-input').addEventListener('change', (e) => Theme.set(e.target.value));
 $('settings-modal').addEventListener('click', (e) => {
   if (e.target === $('settings-modal')) $('settings-modal').hidden = true;
 });
