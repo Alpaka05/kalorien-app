@@ -20,6 +20,56 @@ const isoLocal = (date) =>
 
 const $ = (id) => document.getElementById(id);
 
+// --------------------------------------------------------------------------
+// Symbole
+//
+// Gezeichnet, nicht getippt: vorher standen hier Schriftzeichen (\u270e, \u00d7),
+// die je nach Gerät in einer fremden Strichstärke und Ausrichtung erscheinen.
+// Alle Pfade teilen dieselbe Strichstärke 1.75 wie der Pfeil der Auswahlfelder.
+// --------------------------------------------------------------------------
+
+const ICON = {
+  pencil: '<path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14.5 7.5l2 2"/>',
+  trash: '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6 7l1 12.5h10L18 7"/><path d="M10 11v5M14 11v5"/>',
+  check: '<path d="M4.5 12.5l5 5 10-11"/>',
+  down: '<path d="M12 5v13"/><path d="M6 12.5l6 6 6-6"/>',
+  up: '<path d="M12 19V6"/><path d="M6 11.5l6-6 6 6"/>',
+  dash: '<path d="M5 12h14"/>',
+  alert: '<path d="M12 4.5 2.5 20h19L12 4.5Z"/><path d="M12 10v4.5"/><path d="M12 17.6v.4"/>',
+};
+
+function icon(name, size = 16) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.75');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = ICON[name] || '';
+  return svg;
+}
+
+// Statussymbol der Einschätzung. Die Farbe kommt aus dem CSS über die
+// Status-Klasse am Panel, die Form muss die Aussage allein tragen.
+const COACH_ICON = {
+  on_track: 'check',
+  above_goal: 'up',
+  slightly_behind: 'down',
+  behind: 'down',
+  no_data: 'dash',
+  no_goal: 'dash',
+};
+
+function setCoachIcon(name) {
+  const wrap = $('coach-icon');
+  wrap.textContent = '';
+  wrap.appendChild(icon(name, 18));
+}
+
 const state = {
   me: null,
   range: 7,
@@ -168,7 +218,7 @@ function buildEntryRow(entry) {
   edit.className = 'icon-btn';
   edit.title = 'Eintrag bearbeiten';
   edit.setAttribute('aria-label', 'Eintrag bearbeiten');
-  edit.textContent = '✎';
+  edit.appendChild(icon('pencil'));
   edit.addEventListener('click', () => {
     state.editingId = entry.id;
     renderToday();
@@ -178,7 +228,7 @@ function buildEntryRow(entry) {
   del.className = 'icon-btn danger';
   del.title = 'Eintrag löschen';
   del.setAttribute('aria-label', 'Eintrag löschen');
-  del.textContent = '×';
+  del.appendChild(icon('trash'));
   del.addEventListener('click', async () => {
     del.disabled = true;
     try {
@@ -588,6 +638,7 @@ async function loadCoach(refresh = false) {
       ? await api('/api/coach/refresh', { method: 'POST' })
       : await api('/api/coach');
     box.className = 'coach ' + (data.status || '');
+    setCoachIcon(COACH_ICON[data.status] || 'dash');
     $('coach-headline').textContent = data.headline || '';
     $('coach-message').textContent = data.message || '';
     const tips = $('coach-tips');
@@ -601,7 +652,8 @@ async function loadCoach(refresh = false) {
     $('coach-stamp').textContent = data.cached ? 'Gespeicherte Einschätzung' : 'Frisch ausgewertet';
     refreshBtn.hidden = data.status === 'no_goal' || data.status === 'no_data';
   } catch (err) {
-    box.className = 'coach';
+    box.className = 'coach error';
+    setCoachIcon('alert');
     $('coach-headline').textContent = 'Einschätzung nicht möglich';
     $('coach-message').textContent = err.message;
     $('coach-stamp').textContent = '';
