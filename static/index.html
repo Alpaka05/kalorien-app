@@ -3,11 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="color-scheme" content="light" />
+<!-- Beide Schemata anmelden: sonst zeichnet der Browser Scrollbalken und
+     Formularelemente im Dunkelmodus weiter hell. -->
+<meta name="color-scheme" content="light dark" />
 <title>Kalorien-Tagebuch</title>
 <link rel="icon" href="/favicon.ico" sizes="any" />
 <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="/theme.js?v=__ASSET_V__"></script>
 <link rel="stylesheet" href="/styles.css?v=__ASSET_V__" />
 </head>
 <body>
@@ -18,7 +21,8 @@
       <p class="subtitle">Sag einfach, was du gegessen oder getrunken hast.</p>
     </div>
     <div class="topbar-actions">
-      <button class="icon-btn" id="settings-btn" title="Einstellungen" aria-label="Einstellungen">⚙</button>
+      <button class="icon-btn menu-btn" id="settings-btn" title="Einstellungen"
+              aria-label="Einstellungen" aria-haspopup="dialog"><span class="menu-lines" aria-hidden="true"></span></button>
     </div>
   </div>
 
@@ -118,6 +122,15 @@
     <div class="modal-field">
       <label class="field-label" for="name-input">Anzeigename (optional)</label>
       <input type="text" id="name-input" maxlength="60" autocomplete="off" />
+    </div>
+    <div class="modal-field">
+      <label class="field-label" for="theme-input">Farbschema</label>
+      <select id="theme-input">
+        <option value="system">Automatisch (Systemeinstellung)</option>
+        <option value="light">Hell</option>
+        <option value="dark">Dunkel</option>
+      </select>
+      <p class="modal-hint">Wirkt sofort und gilt nur auf diesem Gerät – „Speichern" braucht es dafür nicht.</p>
     </div>
     <p class="message" id="settings-msg"></p>
     <div class="modal-actions">
