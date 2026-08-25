@@ -106,26 +106,74 @@ def _json_call(prompt: str, schema: dict, effort: str, max_tokens: int) -> dict:
 # Kalorienschätzung
 # --------------------------------------------------------------------------
 
+# Die Bestandteile stehen absichtlich als erstes Feld im Schema: Structured
+# Outputs erzeugt die Felder in dieser Reihenfolge, das Modell zerlegt die
+# Mahlzeit also erst und nennt die Summe danach. Vorher gab es nur das
+# Ergebnisfeld – die Schätzung musste ohne jeden Zwischenschritt entstehen, und
+# genau dabei geht bei zusammengesetzten Gerichten am meisten schief.
 MEAL_SCHEMA = {
     "type": "object",
     "properties": {
+        "components": {
+            "type": "array",
+            "description": (
+                "Jeder Bestandteil einzeln, auch wenn es nur einer ist. Keine "
+                "Sammelposten und keine Gesamtgerichte neben ihren Einzelteilen."
+            ),
+            "items": {
+                "type": "object",
+                "properties": {
+                    "bestandteil": {
+                        "type": "string",
+                        "description": "Name des Bestandteils auf Deutsch.",
+                    },
+                    "menge": {
+                        "type": "string",
+                        "description": (
+                            "Angenommene Menge mit Einheit, z. B. '2 Scheiben (50 g)' "
+                            "oder '250 ml'."
+                        ),
+                    },
+                    "kcal": {
+                        "type": "number",
+                        "description": "Kilokalorien dieses Bestandteils.",
+                    },
+                    "protein_g": {
+                        "type": "number",
+                        "description": "Eiweiß dieses Bestandteils in Gramm.",
+                    },
+                },
+                "required": ["bestandteil", "menge", "kcal", "protein_g"],
+                "additionalProperties": False,
+            },
+        },
         "normalized": {
             "type": "string",
-            "description": "Kurze, aufgeräumte Beschreibung der Mahlzeit auf Deutsch.",
+            "description": (
+                "Kurze deutsche Beschreibung der Mahlzeit mit den angenommenen "
+                "Mengen, damit die Annahme nachvollziehbar bleibt."
+            ),
         },
-        "kcal": {"type": "number", "description": "Geschätzte Kilokalorien."},
-        "protein_g": {"type": "number", "description": "Geschätztes Eiweiß in Gramm."},
+        "kcal": {"type": "number", "description": "Summe der Bestandteile."},
+        "protein_g": {"type": "number", "description": "Eiweißsumme der Bestandteile."},
     },
-    "required": ["normalized", "kcal", "protein_g"],
+    "required": ["components", "normalized", "kcal", "protein_g"],
     "additionalProperties": False,
 }
 
 MEAL_PROMPT = (
-    "Schätze für die folgende Angabe die Kilokalorien und das Eiweiß in Gramm. "
-    "Nutze übliche Portionsgrößen, wenn keine Menge genannt ist. Enthält die "
-    "Angabe mehrere Bestandteile, rechne sie zusammen. Formuliere `normalized` "
-    "als kurze deutsche Beschreibung mit der angenommenen Menge, damit die "
-    "Annahme später nachvollziehbar ist.\n\nAngabe: "
+    "Schätze für die folgende Angabe die Kilokalorien und das Eiweiß in Gramm.\n\n"
+    "Gehe dabei so vor:\n"
+    "1. Zerlege die Angabe in ihre Bestandteile. Auch eine einzelne Speise ist "
+    "ein Bestandteil.\n"
+    "2. Lege für jeden Bestandteil eine konkrete Menge mit Einheit fest. Ist "
+    "keine Menge genannt, nimm eine übliche Portion an und nenne sie.\n"
+    "3. Schätze kcal und Eiweiß je Bestandteil.\n"
+    "4. Nenne in `kcal` und `protein_g` die Summe der Bestandteile.\n\n"
+    "Zähle nichts doppelt: entweder das fertige Gericht als einen Bestandteil "
+    "oder seine Einzelteile, nicht beides. Bei Unsicherheit schätze eher "
+    "knapp als groß – eine zu hohe Schätzung lässt ein Tagesziel als erreicht "
+    "erscheinen, obwohl es das nicht ist.\n\nAngabe: "
 )
 
 
@@ -138,8 +186,25 @@ def estimate_meal(description: str) -> dict:
         # Großzügig, weil Denk- und Antworttokens sich das Budget teilen.
         max_tokens=8192,
     )
-    kcal = result.get("kcal")
-    protein = result.get("protein_g")
+
+    # Maßgeblich ist die Summe der Bestandteile, nicht die Zahl, die das Modell
+    # daneben nennt: nur die Summe passt garantiert zu der Aufschlüsselung, aus
+    # der sie entstanden ist. Weicht die eigene Summe des Modells stark ab, ist
+    # das ein Hinweis auf Doppelzählung und landet im Log.
+    components = [c for c in (result.get("components") or []) if isinstance(c, dict)]
+    kcal = _sum_components(components, "kcal")
+    protein = _sum_components(components, "protein_g")
+    stated = result.get("kcal")
+    if kcal is None:
+        # Ohne brauchbare Bestandteile bleibt nur die genannte Summe.
+        kcal, protein = stated, result.get("protein_g")
+    elif isinstance(stated, (int, float)) and kcal > 0 and abs(stated - kcal) / kcal > 0.15:
+        log.warning(
+            "Schätzung uneinheitlich für %r: Bestandteile ergeben %.0f kcal, "
+            "genannt wurden %.0f kcal",
+            description[:80], kcal, stated,
+        )
+
     if not isinstance(kcal, (int, float)) or not 0 <= kcal <= 20000:
         raise AIError("Die Schätzung war nicht plausibel. Bitte präziser beschreiben.")
     # Auch geschätzte Werte werden begrenzt, damit ein Ausrutscher der KI keine
@@ -149,7 +214,19 @@ def estimate_meal(description: str) -> dict:
         "normalized": (result.get("normalized") or description).strip()[:300],
         "kcal": float(kcal),
         "protein": float(protein) if valid_protein else None,
+        # Noch nicht gespeichert, aber für das Log und einen späteren
+        # Aufschlüsselungs-Nachweis in der Oberfläche schon vorhanden.
+        "components": components,
     }
+
+
+def _sum_components(components: list, key: str) -> float | None:
+    """Summiert ein Zahlenfeld über die Bestandteile; None, wenn nichts brauchbar ist."""
+    values = [c.get(key) for c in components]
+    usable = [float(v) for v in values if isinstance(v, (int, float)) and v >= 0]
+    if not usable or len(usable) != len(values):
+        return sum(usable) if usable else None
+    return sum(usable)
 
 
 # --------------------------------------------------------------------------
