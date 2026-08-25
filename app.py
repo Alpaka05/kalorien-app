@@ -10,6 +10,7 @@ import io
 import ipaddress
 import json
 import logging
+import mimetypes
 import os
 import re
 from hashlib import sha256
@@ -61,6 +62,10 @@ TRUST_PROXY_IP = os.environ.get("TRUST_PROXY_IP", "true").strip().lower() not in
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 ALLOWED_RANGES = (7, 14, 30, 90)
+
+# Python kennt diese Endung erst ab 3.13; im Container (3.12) käme das
+# Manifest sonst als octet-stream und würde wegen nosniff verworfen.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 db.init_db()
