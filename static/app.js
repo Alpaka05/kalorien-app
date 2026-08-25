@@ -107,12 +107,18 @@ function setMessage(el, text, kind = 'error') {
 // Eintrag hinzufügen
 // --------------------------------------------------------------------------
 
-async function addEntry(payload, buttonEl) {
+// keepLabel: Chips tragen ihre kcal-Zahl in einem eigenen Element. Ein
+// Textwechsel würde die Auszeichnung zerstören (und den Chip beim Zurücksetzen
+// auf eine Zeile Text eindampfen), deshalb zeigen sie das Warten nur über den
+// gesperrten Zustand.
+async function addEntry(payload, buttonEl, keepLabel = false) {
   setMessage($('error-msg'), '');
-  const label = buttonEl ? buttonEl.textContent : null;
+  const label = buttonEl && !keepLabel ? buttonEl.textContent : null;
   if (buttonEl) {
     buttonEl.disabled = true;
-    buttonEl.textContent = payload.kcal == null ? 'Schätze…' : 'Speichere…';
+    if (!keepLabel) {
+      buttonEl.textContent = payload.kcal == null ? 'Schätze…' : 'Speichere…';
+    }
   }
   try {
     await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
@@ -123,7 +129,7 @@ async function addEntry(payload, buttonEl) {
   } finally {
     if (buttonEl) {
       buttonEl.disabled = false;
-      buttonEl.textContent = label;
+      if (!keepLabel) buttonEl.textContent = label;
     }
   }
 }
@@ -376,6 +382,188 @@ function renderGoalProgress(totalKcal, totalProtein) {
 }
 
 // --------------------------------------------------------------------------
+// Feste Schnellwahl
+//
+// Gerichte, die immer gleich aussehen, brauchen keine KI-Schätzung: die kcal-
+// und Eiweißwerte stehen hier fest und werden direkt gespeichert. Das spart
+// bei jedem Eintrag einen API-Aufruf und ist sofort da.
+//
+// label ist die kurze Aufschrift auf dem Knopf, desc landet im Tagebuch (und
+// bildet damit auch die Gruppierung der automatischen Favoriten).
+// --------------------------------------------------------------------------
+
+const PRESETS = [
+  {
+    label: 'Spaghetti Pesto',
+    desc: 'Teller Spaghetti mit Pesto',
+    kcal: 700, protein: 20,
+  },
+  {
+    label: 'Shake',
+    desc: 'Shake mit 1 Banane, Handvoll Blaubeeren, 40 g Haferflocken, '
+      + '2 große Löffel Erdnussbutter, 500 ml Milch (3,8 %), 1 Löffel ESN Whey',
+    kcal: 950, protein: 57,
+  },
+  {
+    label: 'Quark-Bowl',
+    desc: 'Schüssel mit Quark, Joghurt, 40 g Haferflocken und 1 Banane',
+    kcal: 530, protein: 44,
+  },
+  {
+    label: 'Pringles',
+    desc: '1 Dose Pringles (185 g)',
+    kcal: 990, protein: 7,
+  },
+  {
+    label: 'TK-Pizza',
+    desc: '1 Tiefkühlpizza',
+    kcal: 850, protein: 32,
+  },
+  {
+    label: 'Proteinshake',
+    desc: 'Proteinshake mit 1 Löffel Whey und Wasser',
+    kcal: 115, protein: 23,
+  },
+  {
+    label: 'Brot mit Käse',
+    desc: '2 Scheiben Brot mit Butter und Käse',
+    kcal: 520, protein: 22,
+  },
+  {
+    label: 'Rührei (3 Eier)',
+    desc: 'Rührei aus 3 Eiern mit Butter',
+    kcal: 270, protein: 20,
+  },
+  {
+    label: 'Hähnchen, Reis, Gemüse',
+    desc: 'Portion Hähnchenbrust mit Reis und Gemüse',
+    kcal: 600, protein: 45,
+  },
+  {
+    label: 'Döner',
+    desc: '1 Döner Kebab',
+    kcal: 700, protein: 35,
+  },
+  {
+    label: 'Pommes',
+    desc: '1 Portion Pommes frites',
+    kcal: 400, protein: 5,
+  },
+  {
+    label: 'Tafel Schokolade',
+    desc: '1 Tafel Schokolade (100 g)',
+    kcal: 540, protein: 7,
+  },
+  {
+    label: 'Handvoll Nüsse',
+    desc: 'Handvoll Nüsse (30 g)',
+    kcal: 190, protein: 6,
+  },
+  {
+    label: 'Banane',
+    desc: '1 Banane',
+    kcal: 105, protein: 1,
+  },
+  {
+    label: 'Kaffee mit Milch',
+    desc: 'Tasse Kaffee mit einem Schuss Milch',
+    kcal: 25, protein: 1,
+  },
+  // Getränke. Stehen bewusst am Ende: sie kommen selten allein, sondern
+  // zusätzlich zu einem Gericht – und sollen die Gerichte oben nicht aus den
+  // immer sichtbaren Reihen schieben.
+  {
+    label: 'Cola 0,5 l',
+    desc: '0,5 l Cola',
+    kcal: 210, protein: 0,
+  },
+  {
+    label: 'Cola Zero 0,5 l',
+    desc: '0,5 l Cola Zero',
+    kcal: 2, protein: 0,
+  },
+  {
+    label: 'Bier 0,5 l',
+    desc: '0,5 l Bier (Pils)',
+    kcal: 210, protein: 2,
+  },
+  {
+    label: 'Weizen 0,5 l',
+    desc: '0,5 l Weizenbier',
+    kcal: 230, protein: 3,
+  },
+  {
+    label: 'Glas Wein 0,2 l',
+    desc: '0,2 l Wein',
+    kcal: 160, protein: 0,
+  },
+  {
+    label: 'Orangensaft 0,25 l',
+    desc: '0,25 l Orangensaft',
+    kcal: 110, protein: 2,
+  },
+];
+
+// So viele Knöpfe stehen immer da, der Rest liegt hinter dem Aufklapper. Zwei
+// Zeilen sind der Kompromiss: die üblichen Gerichte sind einen Griff entfernt,
+// ohne dass die Liste die Tageszahlen nach unten schiebt.
+const PRESETS_COLLAPSED = 6;
+const PRESETS_KEY = 'kcal-presets-open';
+
+// Die Wahl gehört zum Gerät, nicht zum Konto – und localStorage kann werfen
+// (privater Modus, blockierte Cookies), dann bleibt es beim eingeklappten
+// Zustand statt dass die Chips ganz fehlen.
+function presetsOpen(value) {
+  try {
+    if (value === undefined) return localStorage.getItem(PRESETS_KEY) === '1';
+    localStorage.setItem(PRESETS_KEY, value ? '1' : '0');
+  } catch (err) {
+    /* ignorieren */
+  }
+  return Boolean(value);
+}
+
+function buildPresetChip(preset) {
+  const chip = document.createElement('button');
+  chip.className = 'chip';
+  chip.title = `${preset.desc} · ${fmtKcal(preset.kcal)}, ${fmtNum(preset.protein)} g Eiweiß`
+    + ' – wird ohne neue Schätzung eingetragen';
+  chip.append(document.createTextNode(preset.label));
+  const kcal = document.createElement('span');
+  kcal.className = 'chip-kcal';
+  kcal.textContent = fmtNum(preset.kcal);
+  chip.appendChild(kcal);
+  chip.addEventListener('click', () =>
+    addEntry(
+      { desc: preset.desc, kcal: preset.kcal, protein: preset.protein },
+      chip,
+      true
+    )
+  );
+  return chip;
+}
+
+function renderPresets() {
+  const container = $('presets');
+  const open = presetsOpen();
+  const shown = open ? PRESETS : PRESETS.slice(0, PRESETS_COLLAPSED);
+  container.textContent = '';
+  shown.forEach((preset) => container.appendChild(buildPresetChip(preset)));
+
+  const hidden = PRESETS.length - PRESETS_COLLAPSED;
+  if (hidden <= 0) return;
+  const toggle = document.createElement('button');
+  toggle.className = 'chip chip-toggle';
+  toggle.textContent = open ? 'weniger' : `+${hidden} mehr`;
+  toggle.setAttribute('aria-expanded', String(open));
+  toggle.addEventListener('click', () => {
+    presetsOpen(!open);
+    renderPresets();
+  });
+  container.appendChild(toggle);
+}
+
+// --------------------------------------------------------------------------
 // Favoriten / Schnell-Eintrag
 // --------------------------------------------------------------------------
 
@@ -395,7 +583,8 @@ async function loadFavorites() {
     chip.addEventListener('click', () =>
       addEntry(
         { desc: item.desc, kcal: item.kcal, protein: item.protein },
-        chip
+        chip,
+        true
       )
     );
     container.appendChild(chip);
@@ -794,6 +983,7 @@ $('logout-btn').addEventListener('click', async () => {
 (async function start() {
   try {
     await loadMe();
+    renderPresets();
     document.querySelector('[data-range="7"]').classList.add('active');
     await refreshAll();
   } catch (err) {
