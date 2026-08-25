@@ -221,12 +221,15 @@ def estimate_meal(description: str) -> dict:
 
 
 def _sum_components(components: list, key: str) -> float | None:
-    """Summiert ein Zahlenfeld über die Bestandteile; None, wenn nichts brauchbar ist."""
+    """Summiert ein Zahlenfeld über die Bestandteile; None, wenn nichts brauchbar ist.
+
+    Unbrauchbare Posten (fehlendes Feld, keine Zahl, negativ) werden
+    übersprungen: eine Teilsumme ist immer noch besser als keine Angabe, und die
+    Abweichungsprüfung beim Aufrufer schlägt an, wenn dabei zu viel wegfällt.
+    """
     values = [c.get(key) for c in components]
     usable = [float(v) for v in values if isinstance(v, (int, float)) and v >= 0]
-    if not usable or len(usable) != len(values):
-        return sum(usable) if usable else None
-    return sum(usable)
+    return sum(usable) if usable else None
 
 
 # --------------------------------------------------------------------------
