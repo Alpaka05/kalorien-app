@@ -18,8 +18,8 @@ Schätzungen wird kein externer Dienst gebraucht.
   wo du nachgelassen hast (auf Zunehmen ausgelegt)
 - **Verlauf** – 7, 14 oder 30 Tage, beliebig weiter zurückblätterbar; ein Klick
   auf einen Balken zeigt, was an dem Tag wann gegessen wurde
-- **Schnell-Eintrag** – häufige Mahlzeiten als Chips, ein Tap genügt (ohne
-  neuen API-Aufruf)
+- **Schnellwahl** – feste Chips für die üblichen Gerichte und Getränke, ein Tap
+  genügt (ohne neuen API-Aufruf)
 - **Gewichts-Tracking** mit Trend über 30 Tage
 - **CSV-Export** aller Einträge
 
@@ -177,7 +177,7 @@ ANTHROPIC_MODEL=claude-sonnet-5
 ```
 
 Ein Aufruf entsteht pro neuem Freitext-Eintrag und einmal täglich für die
-Einschätzung; Schnell-Einträge über die Chips kosten nichts.
+Einschätzung; Einträge über die Schnellwahl-Chips kosten nichts.
 
 ## Konfiguration
 
