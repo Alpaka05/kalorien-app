@@ -36,19 +36,21 @@ answer to "did I eat enough today" — not precision nutrition analysis.
 
 ## Positioning
 
-The product is built around eating *enough*, not eating less. Nearly every calorie
-tracker treats the daily target as a ceiling to stay under; here it is a floor to
-reach or slightly exceed, and the AI assessment judges shortfalls rather than
-excesses. That inversion runs through the coach's system prompt, the goal hints,
-and the framing of progress.
+The product was built around eating *enough*, not eating less, and that remains
+the default: a new account is set to gaining, where the daily target is a floor to
+reach or slightly exceed rather than the ceiling nearly every other tracker
+assumes. Since the goal-direction setting, losing is a real second mode rather than
+a tolerated edge case — the same target read as a ceiling, with the assessment,
+the chart colors, and the estimator's rounding bias all inverted.
+
+The two modes are deliberately not symmetrical in tone. Gaining is the one the
+interface was designed for and the one the owner uses; losing must be correct and
+complete, but it does not get its own hints, its own onboarding, or a place in the
+default view. A setting is where it belongs.
 
 The second differentiator is the entry method: free-text estimation instead of a
 food database with search, portions, and barcode scanning. There is no catalogue to
 navigate, which is what makes logging survivable day after day.
-
-Gain-first is the opinionated default and should be pushed further rather than
-softened. Losing or maintaining is tolerated — the app must not break for someone
-cutting — but it is not a mode to build out or give equal weight in the interface.
 
 ## Operating Context
 
@@ -71,9 +73,10 @@ cutting — but it is not a mode to build out or give equal weight in the interf
 
 Confirmed capabilities: free-text entry with AI-estimated kcal and protein, all
 values correctable afterward; a fixed quick-pick row of common meals and drinks
-with hard-coded values; a daily kcal goal with a progress bar and remaining-kcal
-note; an optional protein goal; a daily AI assessment of the last 14 days, cached
-per day and manually refreshable; a 7/14/30-day history chart that pages
+with hard-coded values; a daily kcal goal read as a floor or a ceiling depending on
+the account's goal direction, with a progress bar and remaining-kcal note; an
+optional protein goal; a daily AI assessment of the last 14 days, cached per day
+and manually refreshable; a 7/14/30-day history chart that pages
 arbitrarily far back, with per-day detail on tap; weight logging with a 30-day
 trend; CSV export of all entries; light/dark/system theming stored per device;
 multiple isolated accounts.
@@ -124,8 +127,10 @@ user's own logged data.
 
 1. Logging must stay faster than the excuse not to log. Any addition that lengthens
    the path from "I ate something" to "it's recorded" is a regression.
-2. The goal is a floor, not a ceiling. Progress, assessment, and copy read as
-   "enough yet?", never as "too much".
+2. The goal has a direction and every surface obeys it. On a gaining account it is
+   a floor and progress, assessment, and copy read as "enough yet?"; on a losing
+   account it is a ceiling and the same surfaces read as "still under?". A mixture
+   is the failure case: never a green bar next to a warning about the same day.
 3. Estimates are shown as estimates and stay correctable. Never imply a precision
    the numbers don't have.
 4. One person's private server, one person's data. No third-party services beyond
