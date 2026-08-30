@@ -300,14 +300,6 @@ a:hover { color: var(--accent); }
 .chip:disabled { opacity: 0.6; cursor: default; }
 .chip .chip-kcal { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); margin-left: 5px; }
 
-/* Die feste Schnellwahl steht direkt unter der Eingabe und darf den Blick
-   nicht von den Tageszahlen wegziehen: engerer Abstand nach unten, damit die
-   automatischen Favoriten darunter als dieselbe Gruppe gelesen werden. */
-.presets { margin-bottom: 6px; }
-/* Ohne das nimmt die leere Favoritenzeile (kein Gericht bisher zweimal
-   eingetragen) ihren Abstand weiterhin ein und reißt eine Lücke unter die
-   Schnellwahl. */
-.chips:empty { display: none; margin: 0; }
 .chip-toggle {
   color: var(--text-muted); border-style: dashed;
 }

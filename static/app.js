@@ -388,8 +388,7 @@ function renderGoalProgress(totalKcal, totalProtein) {
 // und Eiweißwerte stehen hier fest und werden direkt gespeichert. Das spart
 // bei jedem Eintrag einen API-Aufruf und ist sofort da.
 //
-// label ist die kurze Aufschrift auf dem Knopf, desc landet im Tagebuch (und
-// bildet damit auch die Gruppierung der automatischen Favoriten).
+// label ist die kurze Aufschrift auf dem Knopf, desc landet im Tagebuch.
 // --------------------------------------------------------------------------
 
 const PRESETS = [
@@ -561,34 +560,6 @@ function renderPresets() {
     renderPresets();
   });
   container.appendChild(toggle);
-}
-
-// --------------------------------------------------------------------------
-// Favoriten / Schnell-Eintrag
-// --------------------------------------------------------------------------
-
-async function loadFavorites() {
-  const items = await api('/api/favorites');
-  const container = $('favorites');
-  container.textContent = '';
-  items.forEach((item) => {
-    const chip = document.createElement('button');
-    chip.className = 'chip';
-    chip.title = 'Ohne neue Schätzung direkt übernehmen';
-    chip.append(document.createTextNode(item.desc));
-    const kcal = document.createElement('span');
-    kcal.className = 'chip-kcal';
-    kcal.textContent = fmtNum(item.kcal);
-    chip.appendChild(kcal);
-    chip.addEventListener('click', () =>
-      addEntry(
-        { desc: item.desc, kcal: item.kcal, protein: item.protein },
-        chip,
-        true
-      )
-    );
-    container.appendChild(chip);
-  });
 }
 
 // --------------------------------------------------------------------------
@@ -933,7 +904,7 @@ async function saveSettings() {
 
 async function refreshAll() {
   state.dayCache = null;
-  await Promise.all([loadToday(), loadSummary(), loadFavorites(), loadWeights()]);
+  await Promise.all([loadToday(), loadSummary(), loadWeights()]);
   loadCoach();
 }
 
