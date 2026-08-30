@@ -1,8 +1,10 @@
 # Kalorien-Tagebuch – Self-Hosted
 
-Kleine Web-App zum Kalorienzählen mit Fokus aufs **Zunehmen**: Du schreibst in
-normaler Sprache hin, was du gegessen hast, Claude schätzt Kalorien und Eiweiß,
-und die App zeigt dir, wie nah du an deinem Tagesziel bist.
+Kleine Web-App zum Kalorienzählen: Du schreibst in normaler Sprache hin, was du
+gegessen hast, Claude schätzt Kalorien und Eiweiß, und die App zeigt dir, wie
+nah du an deinem Tagesziel bist. In den Einstellungen legst du fest, ob du
+**zunehmen** oder **abnehmen** willst – davon hängt ab, ob das Tagesziel als
+Untergrenze oder als Obergrenze gelesen wird.
 
 Läuft komplett auf dem eigenen Server. Außer der Anthropic-API für die
 Schätzungen wird kein externer Dienst gebraucht.
@@ -14,8 +16,11 @@ Schätzungen wird kein externer Dienst gebraucht.
 - **Konten mit E-Mail-Code** – mehrere Personen parallel, jede sieht nur ihre
   eigenen Daten, kein Passwort nötig
 - **Tagesziel** mit Fortschrittsbalken und „noch X kcal bis …"
+- **Ziel: Zunehmen oder Abnehmen** – dieselbe Zahl, zwei Lesarten. Beim
+  Zunehmen willst du sie erreichen, beim Abnehmen darunter bleiben; Einschätzung
+  und Diagrammfarben drehen sich mit
 - **KI-Einschätzung** – bewertet die letzten 14 Tage gegenüber dem Ziel und sagt,
-  wo du nachgelassen hast (auf Zunehmen ausgelegt)
+  wo du nachgelassen hast
 - **Verlauf** – 7, 14 oder 30 Tage, beliebig weiter zurückblätterbar; ein Klick
   auf einen Balken zeigt, was an dem Tag wann gegessen wurde
 - **Schnellwahl** – feste Chips für die üblichen Gerichte und Getränke, ein Tap

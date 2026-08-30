@@ -171,16 +171,32 @@ MEAL_PROMPT = (
     "3. Schätze kcal und Eiweiß je Bestandteil.\n"
     "4. Nenne in `kcal` und `protein_g` die Summe der Bestandteile.\n\n"
     "Zähle nichts doppelt: entweder das fertige Gericht als einen Bestandteil "
-    "oder seine Einzelteile, nicht beides. Bei Unsicherheit schätze eher "
-    "knapp als groß – eine zu hohe Schätzung lässt ein Tagesziel als erreicht "
-    "erscheinen, obwohl es das nicht ist.\n\nAngabe: "
+    "oder seine Einzelteile, nicht beides. "
 )
 
+# Eine Schätzung liegt immer irgendwo daneben; die Frage ist nur, in welche
+# Richtung. Der Fehler soll dorthin fallen, wo er der Person nichts vormacht:
+# beim Zunehmen lässt eine zu hohe Schätzung das Tagesziel als erreicht
+# erscheinen, beim Abnehmen lässt eine zu niedrige es als eingehalten
+# erscheinen. Die Vorgabe dreht sich deshalb mit der Zielrichtung.
+MEAL_UNCERTAINTY = {
+    "gain": (
+        "Bei Unsicherheit schätze eher knapp als groß – eine zu hohe Schätzung "
+        "lässt ein Tagesziel als erreicht erscheinen, obwohl es das nicht ist."
+    ),
+    "lose": (
+        "Bei Unsicherheit schätze eher großzügig als knapp – eine zu niedrige "
+        "Schätzung lässt ein Tagesziel als eingehalten erscheinen, obwohl es "
+        "das nicht ist."
+    ),
+}
 
-def estimate_meal(description: str) -> dict:
+
+def estimate_meal(description: str, direction: str = "gain") -> dict:
     """Schätzt kcal und Eiweiß für eine Freitext-Angabe."""
+    uncertainty = MEAL_UNCERTAINTY.get(direction, MEAL_UNCERTAINTY["gain"])
     result = _json_call(
-        MEAL_PROMPT + description,
+        MEAL_PROMPT + uncertainty + "\n\nAngabe: " + description,
         MEAL_SCHEMA,
         effort="low",
         # Großzügig, weil Denk- und Antworttokens sich das Budget teilen.
@@ -242,7 +258,13 @@ COACH_SCHEMA = {
         "status": {
             "type": "string",
             "enum": ["on_track", "slightly_behind", "behind", "above_goal", "no_data"],
-            "description": "Kurzbewertung der letzten Tage gegenüber dem Ziel.",
+            "description": (
+                "Wo die letzten Tage zum Tagesziel liegen – die Lage, nicht die "
+                "Bewertung: on_track im Zielkorridor, above_goal darüber, "
+                "slightly_behind knapp darunter, behind deutlich darunter. Ob "
+                "das gut oder schlecht ist, hängt an der Zielrichtung und "
+                "gehört in headline und message, nicht hierher."
+            ),
         },
         "headline": {
             "type": "string",
@@ -262,10 +284,24 @@ COACH_SCHEMA = {
     "additionalProperties": False,
 }
 
-COACH_SYSTEM = (
-    "Du bist ein sachlicher Ernährungs-Coach in einem privaten Kalorien-Tagebuch. "
-    "Das Ziel der Person ist ZUZUNEHMEN: sie muss ihr Tagesziel erreichen oder "
-    "leicht überschreiten, zu wenig ist das Problem, nicht zu viel. "
+# Die Zielrichtung entscheidet, welche Abweichung ein Problem ist. Alles
+# andere – Tonfall, Umgang mit Lücken, Grenzen der Auskunft – gilt für beide
+# Richtungen und steht deshalb nur einmal in COACH_RULES.
+COACH_GOAL = {
+    "gain": (
+        "Das Ziel der Person ist ZUZUNEHMEN: sie muss ihr Tagesziel erreichen "
+        "oder leicht überschreiten, zu wenig ist das Problem, nicht zu viel. "
+    ),
+    "lose": (
+        "Das Ziel der Person ist ABZUNEHMEN: das Tagesziel ist eine Obergrenze, "
+        "unter der sie bleiben will, zu viel ist das Problem, nicht zu wenig. "
+        "Lobe aber nicht, wer deutlich darunter liegt: zu wenig zu essen hält "
+        "niemand lange durch und kostet eher Muskeln als Fett. Sag in dem Fall, "
+        "dass mehr drin ist, und achte besonders auf das Eiweiß. "
+    ),
+}
+
+COACH_RULES = (
     "Schreibe auf Deutsch, duze die Person, bleib freundlich und konkret. "
     "Nenne echte Zahlen aus den Daten statt allgemeiner Ratschläge. Wenn Tage "
     "ohne Einträge dabei sind, weise darauf hin, dass sie die Auswertung "
@@ -279,10 +315,20 @@ COACH_SYSTEM = (
 )
 
 
-def coach_analysis(data: dict) -> dict:
+def coach_system(direction: str) -> str:
+    """Systemprompt für die Einschätzung, passend zur Zielrichtung."""
+    return (
+        "Du bist ein sachlicher Ernährungs-Coach in einem privaten "
+        "Kalorien-Tagebuch. "
+        + COACH_GOAL.get(direction, COACH_GOAL["gain"])
+        + COACH_RULES
+    )
+
+
+def coach_analysis(data: dict, direction: str = "gain") -> dict:
     """Bewertet die letzten Tage gegenüber dem Kalorienziel."""
     prompt = (
-        COACH_SYSTEM
+        coach_system(direction)
         + "\n\nHier sind die Daten als JSON:\n"
         + json.dumps(data, ensure_ascii=False, sort_keys=True, indent=1)
     )

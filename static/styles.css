@@ -22,6 +22,10 @@
   /* Wie --text-muted: #A6742B kam nur auf 3.8:1 und wird in 12px-Notizen
      verwendet. */
   --warn: #976927;
+  /* Wie --accent-dark zum Akzent: die kräftigere Stufe für Flächen, die schon
+     in --warn liegen und trotzdem noch einen Hover- und Auswahlzustand
+     brauchen – im Diagramm die Tage über der Grenze. */
+  --warn-strong: #6F4C1B;
   --warn-bg: #F7EFE0;
   /* Schrift auf gefüllten Buttons und der Schleier hinter dem Dialog. Beide
      waren vorher fest verdrahtet – im Dunkelmodus braucht es andere Werte. */
@@ -86,6 +90,7 @@
   --danger: #E08B7F;
   --danger-bg: #38211E;
   --warn: #D2A25C;
+  --warn-strong: #E8C089;
   --warn-bg: #332A1B;
   --on-accent: #10201A;
   --backdrop: rgba(8, 8, 7, 0.62);
@@ -383,6 +388,11 @@ a:hover { color: var(--accent); }
   flex-shrink: 0;
 }
 .week-bar.reached { background: var(--accent); }
+/* Nur beim Abnehmen: ein Tag über der Grenze. Dieselbe Bedeutung wie die
+   bernsteinfarbene Notiz auf der Tageskarte, deshalb dieselbe Farbe. */
+.week-bar.over { background: var(--warn); }
+.week-col:hover .week-bar.over,
+.week-col.selected .week-bar.over { background: var(--warn-strong); }
 /* Heute nur dezent markieren, damit es der Auswahl nicht die Show stiehlt. */
 .week-bar.today { box-shadow: inset 0 0 0 1px var(--accent-dark); }
 .week-col.selected .week-bar { background: var(--accent-dark); }
@@ -431,6 +441,12 @@ a:hover { color: var(--accent); }
 .coach.above_goal .coach-icon { color: var(--accent); }
 .coach.slightly_behind .coach-icon,
 .coach.behind .coach-icon { color: var(--warn); }
+/* Beim Abnehmen ist die gute Seite die andere: unter dem Ziel zu liegen ist
+   der Normalfall, darüber die Warnung. Die Statuswerte selbst bleiben gleich,
+   sie beschreiben nur die Lage. */
+.coach.lose.above_goal .coach-icon { color: var(--warn); }
+.coach.lose.slightly_behind .coach-icon,
+.coach.lose.behind .coach-icon { color: var(--accent); }
 .coach.error .coach-icon { color: var(--danger); }
 .coach-headline { font-size: 14.5px; font-weight: 600; margin: 0; text-wrap: balance; }
 .coach-message { font-size: 13.5px; color: var(--text-secondary); margin: 0; line-height: 1.55; text-wrap: pretty; }

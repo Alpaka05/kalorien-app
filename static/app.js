@@ -20,6 +20,12 @@ const isoLocal = (date) =>
 
 const $ = (id) => document.getElementById(id);
 
+// Zielrichtung des Kontos. "lose" dreht die Bewertung um: das Tagesziel ist
+// dann eine Obergrenze statt einer Untergrenze. Der Standard "gain" gilt auch,
+// solange /api/me noch nicht geantwortet hat, damit nichts kurz falsch
+// eingefärbt aufblitzt.
+const losingWeight = () => (state.me && state.me.goal_direction) === 'lose';
+
 // --------------------------------------------------------------------------
 // Symbole
 //
@@ -354,11 +360,25 @@ function renderGoalProgress(totalKcal, totalProtein) {
     return;
   }
   const share = Math.min(100, Math.round((totalKcal / goal) * 100));
+  const losing = losingWeight();
   bar.hidden = false;
-  bar.classList.toggle('over', totalKcal >= goal);
+  // Beim Zunehmen wechselt der Balken die Farbe, sobald das Ziel erreicht ist;
+  // beim Abnehmen erst, wenn es überschritten wurde – dort ist genau auf dem
+  // Ziel noch kein Fehltritt.
+  bar.classList.toggle('over', losing ? totalKcal > goal : totalKcal >= goal);
   bar.firstElementChild.style.width = share + '%';
   const remaining = goal - totalKcal;
-  if (remaining > 0) {
+  if (losing) {
+    if (remaining >= 0) {
+      // Bewusst ohne "good": unter der Obergrenze zu liegen ist am Morgen noch
+      // keine Leistung, das ist erst am Ende des Tages eine Aussage.
+      note.className = 'card-note';
+      note.textContent = `noch ${fmtKcal(remaining)} von ${fmtNum(goal)} übrig`;
+    } else {
+      note.className = 'card-note warn';
+      note.textContent = `${fmtKcal(-remaining)} über dem Ziel`;
+    }
+  } else if (remaining > 0) {
     note.className = 'card-note';
     note.textContent = `noch ${fmtKcal(remaining)} bis ${fmtNum(goal)}`;
   } else {
@@ -599,6 +619,7 @@ function renderSummary() {
   $('chart-next').disabled = !state.end;
 
   const goal = data.kcal_goal || 0;
+  const losing = data.goal_direction === 'lose';
   const maxValue = Math.max(...data.series.map((d) => d.total), goal, 1);
   // Muss zur CSS-Geometrie passen: .week-chart ist 140px hoch, davon gehen
   // .week-total (12) + 2x gap (10) + .week-label (15) ab. Ist der Wert größer,
@@ -625,7 +646,7 @@ function renderSummary() {
     // die Linie einen anderen Wert als den, der daneben steht.
     line.style.bottom = barBaseline + (goal / maxValue) * chartHeight + 'px';
     const tag = document.createElement('span');
-    tag.textContent = 'Ziel ' + fmtNum(goal);
+    tag.textContent = (losing ? 'Grenze ' : 'Ziel ') + fmtNum(goal);
     line.appendChild(tag);
     chart.appendChild(line);
   }
@@ -646,7 +667,13 @@ function renderSummary() {
 
     const bar = document.createElement('div');
     bar.className = 'week-bar';
-    if (goal && day.total >= goal) bar.classList.add('reached');
+    if (goal && losing) {
+      // Ohne Einträge ist ein Tag nicht "unter der Grenze geblieben", sondern
+      // unbekannt – der bliebe sonst grün, obwohl nichts erfasst wurde.
+      if (day.entries > 0) bar.classList.add(day.total > goal ? 'over' : 'reached');
+    } else if (goal && day.total >= goal) {
+      bar.classList.add('reached');
+    }
     if (isToday) bar.classList.add('today');
     bar.style.height = Math.max(4, Math.round((day.total / maxValue) * chartHeight)) + 'px';
 
@@ -797,7 +824,11 @@ async function loadCoach(refresh = false) {
     const data = refresh
       ? await api('/api/coach/refresh', { method: 'POST' })
       : await api('/api/coach');
-    box.className = 'coach ' + (data.status || '');
+    // Die Statuswerte beschreiben die Lage zum Ziel, nicht deren Bewertung.
+    // Welche Lage gut ist, entscheidet die Richtung – deshalb steht sie als
+    // eigene Klasse daneben und das CSS dreht die Farben.
+    box.className =
+      'coach ' + (losingWeight() ? 'lose ' : '') + (data.status || '');
     setCoachIcon(COACH_ICON[data.status] || 'dash');
     $('coach-headline').textContent = data.headline || '';
     $('coach-message').textContent = data.message || '';
@@ -845,8 +876,20 @@ function fillDayStartOptions() {
   }
 }
 
+// Der Hinweis unter dem Tagesziel erklärt, in welche Richtung das Ziel vom
+// Verbrauch abweichen soll. Er hängt an der Auswahl darüber und ändert sich
+// deshalb sofort mit, nicht erst nach dem Speichern.
+function renderGoalHint() {
+  $('goal-hint').textContent =
+    $('goal-direction-input').value === 'lose'
+      ? 'Zum Abnehmen liegt das Ziel unter deinem Verbrauch – typisch sind 300–500 kcal Defizit pro Tag.'
+      : 'Zum Zunehmen liegt das Ziel über deinem Verbrauch – typisch sind 300–500 kcal Überschuss pro Tag.';
+}
+
 function openSettings() {
   fillDayStartOptions();
+  $('goal-direction-input').value = state.me.goal_direction || 'gain';
+  renderGoalHint();
   $('goal-input').value = state.me.kcal_goal ? Math.round(state.me.kcal_goal) : '';
   $('protein-goal-input').value = state.me.protein_goal ? Math.round(state.me.protein_goal) : '';
   $('day-start-input').value = String(state.me.day_start_hour || 0);
@@ -865,6 +908,7 @@ async function saveSettings() {
       await api('/api/me', {
         method: 'PATCH',
         body: JSON.stringify({
+          goal_direction: $('goal-direction-input').value,
           kcal_goal: $('goal-input').value.trim() || null,
           protein_goal: $('protein-goal-input').value.trim() || null,
           day_start_hour: $('day-start-input').value,
@@ -937,6 +981,7 @@ $('settings-btn').addEventListener('click', openSettings);
 $('settings-close').addEventListener('click', () => ($('settings-modal').hidden = true));
 $('settings-cancel').addEventListener('click', () => ($('settings-modal').hidden = true));
 $('settings-save').addEventListener('click', saveSettings);
+$('goal-direction-input').addEventListener('change', renderGoalHint);
 // Das Farbschema liegt im localStorage, nicht im Konto: es wirkt sofort und
 // gehoert deshalb nicht in die PATCH-Nutzlast von "Speichern".
 $('theme-input').addEventListener('change', (e) => Theme.set(e.target.value));
