@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- Stunde, ab der ein neuer Tag zählt. 0 = Mitternacht, 4 = alles vor
     -- 04:00 gehört noch zum Vortag (für späte Esser).
     day_start_hour  INTEGER NOT NULL DEFAULT 0,
+    -- 'gain' oder 'lose'. Bestimmt, ob kcal_goal als Untergrenze gelesen wird,
+    -- die erreicht werden soll, oder als Obergrenze, unter der man bleiben
+    -- will. 'gain' ist der Standard, weil die App so angefangen hat.
+    goal_direction  TEXT NOT NULL DEFAULT 'gain',
     created_at      TEXT NOT NULL
 );
 
@@ -145,9 +149,16 @@ def init_db() -> None:
             conn.execute("ALTER TABLE entries ADD COLUMN user_id INTEGER")
         if "protein" not in entry_cols:
             conn.execute("ALTER TABLE entries ADD COLUMN protein REAL")
-        if "day_start_hour" not in _columns(conn, "users"):
+        user_cols = _columns(conn, "users")
+        if "day_start_hour" not in user_cols:
             conn.execute(
                 "ALTER TABLE users ADD COLUMN day_start_hour INTEGER NOT NULL DEFAULT 0"
+            )
+        if "goal_direction" not in user_cols:
+            # Bestehende Konten sind alle zum Zunehmen angelegt worden, der
+            # Standard hält deren Auswertung also unverändert.
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN goal_direction TEXT NOT NULL DEFAULT 'gain'"
             )
         conn.commit()
         conn.executescript(INDEXES)
