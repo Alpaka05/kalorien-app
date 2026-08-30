@@ -521,7 +521,7 @@ def add_entry():
             parse_date(payload["date"]) if payload.get("date") else user_today(g.user)
         )
         entry_time = parse_time(payload["time"]) if payload.get("time") else local_time_hhmm()
-        # Schnell-Eintrag aus den Favoriten: Werte sind bekannt, die KI wird
+        # Schnell-Eintrag aus der Schnellwahl: Werte sind bekannt, die KI wird
         # nicht gebraucht (spart Zeit und API-Kosten).
         if payload.get("kcal") is not None:
             kcal = parse_number(payload["kcal"], "Kalorien", 0, 20000)
@@ -615,31 +615,6 @@ def delete_entry(entry_id: int):
     g.conn.execute("DELETE FROM coach_cache WHERE user_id = ?", (g.user["id"],))
     g.conn.commit()
     return jsonify({"ok": True})
-
-
-@app.route("/api/favorites", methods=["GET"])
-@require_user
-def favorites():
-    """Häufig eingetragene Mahlzeiten der letzten 60 Tage für den Schnell-Eintrag."""
-    rows = g.conn.execute(
-        'SELECT "desc" AS desc, COUNT(*) AS uses, '
-        "       ROUND(AVG(kcal)) AS kcal, ROUND(AVG(protein)) AS protein "
-        "FROM entries WHERE user_id = ? AND entry_date >= ? "
-        'GROUP BY LOWER("desc") HAVING COUNT(*) >= 2 '
-        "ORDER BY uses DESC, MAX(id) DESC LIMIT 6",
-        (g.user["id"], day_offset_iso(60)),
-    ).fetchall()
-    return jsonify(
-        [
-            {
-                "desc": r["desc"],
-                "kcal": r["kcal"],
-                "protein": r["protein"],
-                "uses": r["uses"],
-            }
-            for r in rows
-        ]
-    )
 
 
 # --------------------------------------------------------------------------

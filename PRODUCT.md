@@ -70,8 +70,8 @@ cutting — but it is not a mode to build out or give equal weight in the interf
 ## Capabilities and Constraints
 
 Confirmed capabilities: free-text entry with AI-estimated kcal and protein, all
-values correctable afterward; quick-entry chips derived from meals logged at least
-twice in the last 60 days; a daily kcal goal with a progress bar and remaining-kcal
+values correctable afterward; a fixed quick-pick row of common meals and drinks
+with hard-coded values; a daily kcal goal with a progress bar and remaining-kcal
 note; an optional protein goal; a daily AI assessment of the last 14 days, cached
 per day and manually refreshable; a 7/14/30-day history chart that pages
 arbitrarily far back, with per-day detail on tap; weight logging with a 30-day
