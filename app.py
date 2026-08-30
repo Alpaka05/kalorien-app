@@ -184,6 +184,21 @@ def day_start(user) -> int:
         return 0
 
 
+# Richtung des Tagesziels. "gain": kcal_goal ist eine Untergrenze, die erreicht
+# werden soll. "lose": kcal_goal ist eine Obergrenze, unter der man bleiben
+# will. Alles andere in der App bleibt gleich – nur die Bewertung dreht sich.
+GOAL_DIRECTIONS = ("gain", "lose")
+
+
+def goal_direction(user) -> str:
+    """Zielrichtung der Person; "gain", wenn nichts Gültiges gespeichert ist."""
+    try:
+        value = user["goal_direction"]
+    except (KeyError, IndexError, TypeError):
+        return "gain"
+    return value if value in GOAL_DIRECTIONS else "gain"
+
+
 def user_today(user) -> str:
     """Tag, dem "jetzt" für diese Person zugerechnet wird."""
     return logical_today(day_start(user))
@@ -391,6 +406,7 @@ def me():
             "kcal_goal": user["kcal_goal"],
             "protein_goal": user["protein_goal"],
             "day_start_hour": day_start(user),
+            "goal_direction": goal_direction(user),
             "mail_configured": mailer.is_configured(),
         }
     )
@@ -418,6 +434,12 @@ def update_me():
             name = (payload["display_name"] or "").strip()[:60]
             fields.append("display_name = ?")
             values.append(name or None)
+        if "goal_direction" in payload:
+            direction = str(payload["goal_direction"] or "").strip()
+            if direction not in GOAL_DIRECTIONS:
+                return bad("Ziel muss „Zunehmen“ oder „Abnehmen“ sein.")
+            fields.append("goal_direction = ?")
+            values.append(direction)
         new_start = None
         if "day_start_hour" in payload:
             new_start = int(parse_number(payload["day_start_hour"], "Tagesbeginn", 0, 11))
@@ -438,12 +460,14 @@ def update_me():
         g.conn.commit()
 
     row = g.conn.execute(
-        "SELECT email, display_name, kcal_goal, protein_goal, day_start_hour "
+        "SELECT email, display_name, kcal_goal, protein_goal, day_start_hour, "
+        "       goal_direction "
         "FROM users WHERE id = ?",
         (g.user["id"],),
     ).fetchone()
     result = dict(row)
     result["day_start_hour"] = int(result["day_start_hour"] or 0)
+    result["goal_direction"] = goal_direction(row)
     result["moved_entries"] = moved if fields else 0
     return jsonify(result)
 
@@ -532,7 +556,7 @@ def add_entry():
             )
             normalized = description
         else:
-            estimate = ai.estimate_meal(description)
+            estimate = ai.estimate_meal(description, goal_direction(g.user))
             kcal, protein, normalized = (
                 estimate["kcal"],
                 estimate["protein"],
@@ -669,6 +693,7 @@ def summary():
             "day_start_hour": day_start(g.user),
             "kcal_goal": g.user["kcal_goal"],
             "protein_goal": g.user["protein_goal"],
+            "goal_direction": goal_direction(g.user),
             "series": result,
         }
     )
@@ -774,6 +799,10 @@ def coach_inputs(conn, user) -> dict:
     return {
         "ziel_kcal_pro_tag": user["kcal_goal"],
         "ziel_eiweiss_g_pro_tag": user["protein_goal"],
+        # Steht auch im Systemprompt, gehört aber zusätzlich in die Daten: der
+        # Hash darüber entscheidet, ob eine gespeicherte Einschätzung noch
+        # gilt, und nach einem Wechsel der Richtung gilt sie nicht mehr.
+        "ziel_richtung": "abnehmen" if goal_direction(user) == "lose" else "zunehmen",
         "tagesbeginn_uhr": start,
         "heute": user_today(user),
         "tage": days,
@@ -841,7 +870,7 @@ def coach():
             return jsonify(payload)
 
     try:
-        result = ai.coach_analysis(data)
+        result = ai.coach_analysis(data, goal_direction(user))
     except ai.AIError as exc:
         return bad(str(exc), 502)
 

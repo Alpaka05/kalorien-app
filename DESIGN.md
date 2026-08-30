@@ -166,8 +166,8 @@ and an amber for caution.
 
 - **Quiet Garden Green** (`#4A7A64` light, `#66A385` dark): Desaturated and domestic,
   a grown thing rather than a brand color — deliberately not a vivid app-accent green.
-  It fills primary buttons, fills history bars for days that reached the goal, draws
-  the goal-progress fill, and tints focus rings. It is the system's only affirmative
+  It fills primary buttons, fills history bars for days that met the goal, draws the
+  goal-progress fill, and tints focus rings. It is the system's only affirmative
   voice.
 - **Deep Garden Green** (`#2E5643` light, `#8AC2A4` dark): The stronger sibling. Used
   for primary-button hover, selected chart bars, link text, and "good" notes.
@@ -177,8 +177,10 @@ and an amber for caution.
 ### Secondary
 
 - **Muted Amber** (`#976927` light, `#D2A25C` dark): Caution, not alarm. Marks a goal
-  bar pushed past target and "warn" notes. Paired with **Amber Wash**
-  (`#F7EFE0` / `#332A1B`).
+  bar pushed past target, history bars over the ceiling in losing mode, and "warn"
+  notes. Paired with **Amber Wash** (`#F7EFE0` / `#332A1B`) and, for the hover and
+  selected states of an amber chart bar, **Strong Amber** (`#6F4C1B` / `#E8C089`) —
+  the same role `accent-dark` plays for green.
 
 ### Tertiary
 
@@ -206,9 +208,11 @@ and an amber for caution.
 ### Named Rules
 
 **The Quiet Accent Rule.** Green marks exactly three things: the primary action, a
-goal reached, and focus. It is never used to decorate a surface, tint a heading, or
-distinguish one card from another. Its scarcity is what makes a reached day legible
-at a glance in a 30-bar chart.
+day that met its goal, and focus. It is never used to decorate a surface, tint a
+heading, or distinguish one card from another. Its scarcity is what makes a met day
+legible at a glance in a 30-bar chart. What counts as met depends on the account's
+goal direction — reaching the target when gaining, staying under it when losing —
+but green never means two things at once within one account.
 
 **The Warm Dark Rule.** Dark mode is warm-tinted (`#191817`, not `#000000` and not a
 neutral gray). The stated reason is in the stylesheet itself: a cool dark makes the
@@ -434,9 +438,12 @@ a muted timestamp against a link-style refresh action.
 ### History Chart
 
 Bars are full-height buttons in a flex row (140px tall, 6px gaps), each column
-bottom-aligned so all bars share a baseline. The bar itself is Hairline Strong when
-the day fell short and accent when it reached the goal — the entire chart is readable
-as "did I make it" without a legend. Three details carry the craft:
+bottom-aligned so all bars share a baseline. On a gaining account the bar is Hairline
+Strong when the day fell short and accent when it reached the goal; on a losing
+account accent means the day stayed under the ceiling and Muted Amber means it went
+over, with days that have no entries left Hairline Strong rather than counted as a
+day held. Either way the chart is readable as "did I make it" without a legend.
+Three details carry the craft:
 
 - Focus is moved off the column and onto the bar (`:focus-visible .week-bar`), because
   a ring around a full-height column highlights empty space.
@@ -445,7 +452,8 @@ as "did I make it" without a legend. Three details carry the craft:
   30-day view — which labels only every fifth day — keeps a common baseline.
 
 A dashed Hairline Strong goal line crosses the chart with its value in 10px mono,
-backed by the page color so the line doesn't run through the digits.
+backed by the page color so the line doesn't run through the digits. Its label names
+what the line is in that mode — "Ziel" when gaining, "Grenze" when losing.
 
 ### Icons
 
