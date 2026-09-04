@@ -30,7 +30,7 @@ actually happens every day, and then show plainly whether the day's intake reach
 the goal.
 
 The user writes what they ate in ordinary German prose ("2 Scheiben Toast mit
-Butter"); Claude estimates kcal and protein; the app shows how far the day is from
+Butter"); Gemini estimates kcal and protein; the app shows how far the day is from
 the target. Success is a long unbroken streak of honest daily entries and a visible
 answer to "did I eat enough today" — not precision nutrition analysis.
 
@@ -60,8 +60,9 @@ navigate, which is what makes logging survivable day after day.
   by default.
 - Data lives in a single SQLite file under `data/`, persisted across container
   rebuilds; backup is a tarball of that directory.
-- Anthropic's API is the only external dependency. One API call per free-text
-  entry, plus one per day for the assessment. Quick-entry chips cost nothing.
+- Google's Gemini API is the only external dependency, used on the free tier of
+  Google AI Studio. One API call per free-text entry, plus one per day for the
+  assessment. Quick-entry chips cost nothing.
 - Login is passwordless: an emailed 6-digit code, or the code printed to the
   container log when no SMTP server is configured.
 - Days are user-defined: `day_start_hour` lets a day begin at, say, 04:00 so late
@@ -85,9 +86,10 @@ Technical constraints future work must respect: Flask with server-rendered stati
 HTML pages and hand-written vanilla JS and CSS — no build step, no framework, no
 bundler, and asset cache-busting done by substituting `__ASSET_V__`. SQLite with
 idempotent, forward-only migrations that must survive several Gunicorn workers
-starting at once. Structured Outputs on the Anthropic API for both AI calls.
-`claude-haiku-4-5` is the default model, and the AI request budget must stay well
-under a Cloudflare Tunnel's 100-second timeout.
+starting at once. Structured JSON output (`responseJsonSchema`) on the Gemini REST
+API for both AI calls, using only the standard library. `gemini-3.8-flash` is the
+default model, and the AI request budget must stay well under a Cloudflare
+Tunnel's 100-second timeout.
 
 The interface is German-only, permanently. There is no i18n layer and none is
 wanted: copy may be written inline in German, and layouts should be designed for
@@ -134,7 +136,7 @@ user's own logged data.
 3. Estimates are shown as estimates and stay correctable. Never imply a precision
    the numbers don't have.
 4. One person's private server, one person's data. No third-party services beyond
-   the Anthropic API, no telemetry, and closed registration by default.
+   the Gemini API, no telemetry, and closed registration by default.
 5. Every AI call must have a free fallback path, because the API can fail, cost
    money, or time out — and the diary still has to work.
 
