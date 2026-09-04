@@ -24,6 +24,19 @@ log = logging.getLogger("kalorien.ai")
 # wird (Flash-Lite hat dort das großzügigste Kontingent).
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
+# Im Free Tier ist das neueste Modell zu Stoßzeiten oft überlastet und antwortet
+# mit 503 "high demand" – nicht für Sekunden, sondern für Minuten. Statt zu
+# warten weicht die App auf die nächsten Modelle der Liste aus; die sind älter,
+# aber für eine Kalorienschätzung völlig ausreichend. Reihenfolge = Priorität.
+GEMINI_FALLBACK_MODELS = [
+    m.strip()
+    for m in os.environ.get(
+        "GEMINI_FALLBACK_MODELS", "gemini-2.5-flash,gemini-2.5-flash-lite"
+    ).split(",")
+    if m.strip() and m.strip() != GEMINI_MODEL
+]
+MODELS = [GEMINI_MODEL, *GEMINI_FALLBACK_MODELS]
+
 GEMINI_ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
@@ -45,7 +58,12 @@ _thinking_enabled = os.environ.get("AI_THINKING", "").strip().lower() != "off"
 REQUEST_TIMEOUT = 30.0
 TOTAL_DEADLINE = 50.0
 MIN_RETRY_TIME = 8.0
-MAX_RETRIES = 1
+# Wie oft die Modellliste innerhalb der Frist durchlaufen wird.
+MAX_PASSES = 2
+
+# Modelle, die Gemini in dieser Laufzeit mit 404 abgelehnt hat – werden nicht
+# wieder probiert.
+_unknown_models: set[str] = set()
 
 
 class AIError(Exception):
@@ -74,58 +92,84 @@ def _error_message(exc: urllib.error.HTTPError) -> str:
         return str(exc)
 
 
-def _post(url: str, body: dict, key: str, deadline: float) -> dict:
-    """Ein HTTP-POST an die Gemini-API; wiederholt bei Limit- und Serverfehlern.
+def _post(body: dict, key: str, deadline: float) -> dict:
+    """POST an die Gemini-API, der Reihe nach über alle Modelle in MODELS.
 
-    `deadline` ist ein Zeitpunkt (time.monotonic), bis zu dem die Antwort da sein
-    muss – über alle Versuche hinweg.
+    Ist ein Modell überlastet (503), am Limit (429) oder nicht erreichbar, ist
+    das nächste an der Reihe; erst wenn alle durch sind, beginnt ein zweiter
+    Durchlauf. `deadline` (time.monotonic) gilt für alle Versuche zusammen.
     """
     data = json.dumps(body).encode("utf-8")
     last_exc: Exception | None = None
-    for attempt in range(MAX_RETRIES + 1):
-        remaining = deadline - time.monotonic()
-        if attempt > 0 and remaining < MIN_RETRY_TIME:
-            log.warning("Keine Zeit mehr für einen weiteren Gemini-Versuch")
-            break
-        req = urllib.request.Request(
-            url,
-            data=data,
-            method="POST",
-            headers={"Content-Type": "application/json", "x-goog-api-key": key},
-        )
-        try:
-            timeout = max(1.0, min(REQUEST_TIMEOUT, remaining))
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = _error_message(exc)
-            status = exc.code
-            if status in (401, 403) or (status == 400 and "API_KEY" in detail.upper()):
-                # Ungültiger Key – Wiederholen hilft nicht.
-                log.error("Gemini akzeptiert den API-Key nicht (%s): %s", status, detail)
-                raise AIError("Der Gemini-API-Key wird nicht akzeptiert.") from exc
-            if status == 400:
-                raise _BadRequest(detail) from exc
-            if status == 404:
-                log.error("Gemini kennt das Modell %s nicht: %s", GEMINI_MODEL, detail)
-                raise AIError(f"Das Modell {GEMINI_MODEL} ist unbekannt.") from exc
-            # 429 (Limit) und 5xx: einmal wiederholen, dann aufgeben.
-            log.warning("Gemini-Fehler %s (Versuch %d): %s", status, attempt + 1, detail)
-            last_exc = exc
-        except (urllib.error.URLError, socket.timeout, TimeoutError, OSError) as exc:
-            if _is_timeout(exc):
-                log.warning("Gemini antwortet nicht rechtzeitig (Versuch %d)", attempt + 1)
-            else:
-                log.warning("Keine Verbindung zu Gemini (Versuch %d): %s", attempt + 1, exc)
-            last_exc = exc
+    statuses: list[int] = []
+    attempt = 0
+    for _ in range(MAX_PASSES):
+        for model in MODELS:
+            if model in _unknown_models:
+                continue
+            remaining = deadline - time.monotonic()
+            if attempt > 0 and remaining < MIN_RETRY_TIME:
+                log.warning("Keine Zeit mehr für einen weiteren Gemini-Versuch")
+                return _give_up(last_exc, statuses)
+            attempt += 1
+            req = urllib.request.Request(
+                GEMINI_ENDPOINT.format(model=model),
+                data=data,
+                method="POST",
+                headers={"Content-Type": "application/json", "x-goog-api-key": key},
+            )
+            try:
+                timeout = max(1.0, min(REQUEST_TIMEOUT, remaining))
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    if model != GEMINI_MODEL:
+                        log.info("Antwort vom Ausweichmodell %s", model)
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                detail = _error_message(exc)
+                status = exc.code
+                if status in (401, 403) or (status == 400 and "API_KEY" in detail.upper()):
+                    # Ungültiger Key – ein anderes Modell hilft nicht.
+                    log.error("Gemini akzeptiert den API-Key nicht (%s): %s", status, detail)
+                    raise AIError("Der Gemini-API-Key wird nicht akzeptiert.") from exc
+                if status == 400:
+                    raise _BadRequest(detail) from exc
+                if status == 404:
+                    log.error("Gemini kennt das Modell %s nicht: %s", model, detail)
+                    _unknown_models.add(model)
+                else:
+                    # 429 (Limit) und 5xx (überlastet): nächstes Modell probieren.
+                    log.warning(
+                        "Gemini-Fehler %s bei %s (Versuch %d): %s", status, model, attempt, detail
+                    )
+                statuses.append(status)
+                last_exc = exc
+            except (urllib.error.URLError, socket.timeout, TimeoutError, OSError) as exc:
+                if _is_timeout(exc):
+                    log.warning("%s antwortet nicht rechtzeitig (Versuch %d)", model, attempt)
+                else:
+                    log.warning("Keine Verbindung zu Gemini (Versuch %d): %s", attempt, exc)
+                last_exc = exc
+    return _give_up(last_exc, statuses)
 
+
+def _give_up(last_exc: Exception | None, statuses: list[int]):
+    """Wählt nach erfolglosen Versuchen die Meldung für die Nutzerin."""
+    if last_exc is None:
+        # Nur möglich, wenn jedes Modell schon vorher als unbekannt markiert war.
+        raise AIError(f"Das Modell {GEMINI_MODEL} ist unbekannt.")
+    if statuses and all(st == 404 for st in statuses):
+        raise AIError(f"Das Modell {GEMINI_MODEL} ist unbekannt.") from last_exc
     if isinstance(last_exc, urllib.error.HTTPError):
         if last_exc.code == 429:
             raise AIError(
                 "Gemini-Limit erreicht. Bitte gleich nochmal versuchen."
             ) from last_exc
+        if last_exc.code in (500, 503):
+            raise AIError(
+                "Gemini ist gerade überlastet. Bitte in ein paar Minuten nochmal versuchen."
+            ) from last_exc
         raise AIError("Die KI-Anfrage ist fehlgeschlagen.") from last_exc
-    if last_exc is not None and _is_timeout(last_exc):
+    if _is_timeout(last_exc):
         raise AIError(
             "Gemini hat nicht rechtzeitig geantwortet. Bitte nochmal versuchen."
         ) from last_exc
@@ -161,12 +205,10 @@ def _build_body(prompt: str, schema: dict, max_tokens: int, thinking: str | None
 def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str) -> dict:
     global _thinking_enabled
     key = _api_key()
-    url = GEMINI_ENDPOINT.format(model=GEMINI_MODEL)
     deadline = time.monotonic() + TOTAL_DEADLINE
     try:
         try:
             response = _post(
-                url,
                 _build_body(prompt, schema, max_tokens, thinking if _thinking_enabled else None),
                 key,
                 deadline,
@@ -182,7 +224,7 @@ def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str) -> dic
                 GEMINI_MODEL, exc,
             )
             _thinking_enabled = False
-            response = _post(url, _build_body(prompt, schema, max_tokens, None), key, deadline)
+            response = _post(_build_body(prompt, schema, max_tokens, None), key, deadline)
     except _BadRequest as exc:
         log.error("Gemini lehnt die Anfrage ab (Modell %s): %s", GEMINI_MODEL, exc)
         raise AIError(
