@@ -11,6 +11,7 @@ Das spart eine Abhängigkeit und reicht für zwei Aufrufe völlig aus.
 import json
 import logging
 import os
+import re
 import socket
 import time
 import urllib.error
@@ -28,10 +29,11 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 # mit 503 "high demand" – nicht für Sekunden, sondern für Minuten. Statt zu
 # warten weicht die App auf die nächsten Modelle der Liste aus; die sind älter,
 # aber für eine Kalorienschätzung völlig ausreichend. Reihenfolge = Priorität.
+# Die 2.5er-Modelle stehen neuen Konten nicht mehr offen (404), deshalb nur 3.x.
 GEMINI_FALLBACK_MODELS = [
     m.strip()
     for m in os.environ.get(
-        "GEMINI_FALLBACK_MODELS", "gemini-2.5-flash,gemini-2.5-flash-lite"
+        "GEMINI_FALLBACK_MODELS", "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
     ).split(",")
     if m.strip() and m.strip() != GEMINI_MODEL
 ]
@@ -58,8 +60,14 @@ _thinking_enabled = os.environ.get("AI_THINKING", "").strip().lower() != "off"
 REQUEST_TIMEOUT = 30.0
 TOTAL_DEADLINE = 50.0
 MIN_RETRY_TIME = 8.0
-# Wie oft die Modellliste innerhalb der Frist durchlaufen wird.
+# Wie oft die Modellliste innerhalb der Frist durchlaufen wird. Zwischen den
+# Durchläufen wartet die App: bei 429 so lange, wie Gemini es in der Meldung
+# verlangt ("Please retry in 13.2s"), sonst kurz. Sofort wieder anzufragen
+# verbraucht nur das Minutenlimit des Free Tiers (20 Anfragen), ohne dass es
+# etwas bringt.
 MAX_PASSES = 2
+BACKOFF_DEFAULT = 2.0
+_RETRY_IN = re.compile(r"retry in ([0-9.]+)\s*s", re.IGNORECASE)
 
 # Modelle, die Gemini in dieser Laufzeit mit 404 abgelehnt hat – werden nicht
 # wieder probiert.
@@ -103,7 +111,19 @@ def _post(body: dict, key: str, deadline: float) -> dict:
     last_exc: Exception | None = None
     statuses: list[int] = []
     attempt = 0
-    for _ in range(MAX_PASSES):
+    retry_hint: float | None = None
+    for pass_no in range(MAX_PASSES):
+        if pass_no > 0:
+            # Pause vor dem nächsten Durchlauf, aber nur, wenn danach noch
+            # genug Zeit für einen echten Versuch bleibt.
+            wait = retry_hint + 0.5 if retry_hint else BACKOFF_DEFAULT
+            remaining = deadline - time.monotonic()
+            if remaining - wait < MIN_RETRY_TIME:
+                log.warning("Keine Zeit mehr für einen weiteren Gemini-Durchlauf")
+                return _give_up(last_exc, statuses)
+            log.info("Warte %.1f s vor dem nächsten Gemini-Durchlauf", wait)
+            time.sleep(wait)
+            retry_hint = None
         for model in MODELS:
             if model in _unknown_models:
                 continue
@@ -139,8 +159,13 @@ def _post(body: dict, key: str, deadline: float) -> dict:
                 else:
                     # 429 (Limit) und 5xx (überlastet): nächstes Modell probieren.
                     log.warning(
-                        "Gemini-Fehler %s bei %s (Versuch %d): %s", status, model, attempt, detail
+                        "Gemini-Fehler %s bei %s (Versuch %d): %s",
+                        status, model, attempt, detail.splitlines()[0][:160],
                     )
+                    if status == 429:
+                        hint = _RETRY_IN.search(detail)
+                        if hint:
+                            retry_hint = max(retry_hint or 0.0, float(hint.group(1)))
                 statuses.append(status)
                 last_exc = exc
             except (urllib.error.URLError, socket.timeout, TimeoutError, OSError) as exc:
