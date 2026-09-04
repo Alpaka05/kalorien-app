@@ -197,6 +197,7 @@ wichtigsten:
 |---|---|---|
 | `GEMINI_API_KEY` | – | Pflicht |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Modell für Schätzung und Einschätzung |
+| `AI_THINKING` | an | `off` schaltet die Denkstufe des Modells ab |
 | `APP_TZ` | `Europe/Berlin` | Zeitzone für Datum und Uhrzeit der Einträge |
 | `COOKIE_SECURE` | automatisch | Richtet sich nach HTTP/HTTPS; nur zum Überschreiben |
 | `SECRET_KEY` | automatisch | Ändern macht alle Anmeldungen ungültig |
