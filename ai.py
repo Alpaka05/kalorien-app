@@ -1,30 +1,30 @@
-"""Claude-API-Aufrufe: Kalorienschätzung und Ziel-Einschätzung.
+"""Gemini-API-Aufrufe: Kalorienschätzung und Ziel-Einschätzung.
 
-Beide Aufrufe nutzen Structured Outputs (`output_config.format`), damit die
+Beide Aufrufe nutzen Structured Output (`responseJsonSchema`), damit die
 Antwort garantiert gültiges JSON nach unserem Schema ist – kein Parsen von
 Freitext, kein Aufräumen von Markdown-Codeblöcken.
+
+Die Gemini-API wird direkt über REST angesprochen (nur Standardbibliothek).
+Das spart eine Abhängigkeit und reicht für zwei Aufrufe völlig aus.
 """
 
 import json
 import logging
 import os
-
-import anthropic
+import socket
+import urllib.error
+import urllib.request
 
 log = logging.getLogger("kalorien.ai")
 
-# Haiku als Standard: für Kalorienschätzungen reicht es und es ist das
-# günstigste Modell. Über ANTHROPIC_MODEL umstellbar, z. B. auf claude-sonnet-5
-# oder claude-opus-5, wenn die Schätzungen besser werden sollen.
-ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5").strip()
+# Gemini Flash als Standard: im Free Tier von Google AI Studio kostenlos und
+# für Kalorienschätzungen mehr als ausreichend. Über GEMINI_MODEL umstellbar,
+# z. B. auf gemini-2.5-flash-lite, wenn das Tageslimit des Free Tiers knapp
+# wird (Flash-Lite hat dort das großzügigste Kontingent).
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
-# Der effort-Parameter existiert nicht auf jedem Modell – Haiku 4.5, Sonnet 4.5
-# und die 3er-Reihe lehnen ihn mit HTTP 400 ab. Er wird deshalb nur gesendet,
-# wenn das gewählte Modell ihn unterstützt.
-_EFFORT_UNSUPPORTED = ("claude-haiku", "claude-sonnet-4-5", "claude-3")
-SEND_EFFORT = (
-    os.environ.get("AI_EFFORT", "").strip().lower() != "off"
-    and not ANTHROPIC_MODEL.startswith(_EFFORT_UNSUPPORTED)
+GEMINI_ENDPOINT = (
+    "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
 
 # Zeitbudget so wählen, dass ein Request inklusive Wiederholung deutlich unter
@@ -32,69 +32,123 @@ SEND_EFFORT = (
 REQUEST_TIMEOUT = 30.0
 MAX_RETRIES = 1
 
-_client: anthropic.Anthropic | None = None
-
 
 class AIError(Exception):
     """Fehler, dessen Text der Nutzerin gezeigt werden darf."""
 
 
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
-            raise AIError("ANTHROPIC_API_KEY ist nicht gesetzt.")
-        _client = anthropic.Anthropic(
-            timeout=REQUEST_TIMEOUT, max_retries=MAX_RETRIES
-        )
-    return _client
+def _api_key() -> str:
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        raise AIError("GEMINI_API_KEY ist nicht gesetzt.")
+    return key
 
 
-def _json_call(prompt: str, schema: dict, effort: str, max_tokens: int) -> dict:
-    client = _get_client()
-    output_config: dict = {"format": {"type": "json_schema", "schema": schema}}
-    if SEND_EFFORT:
-        output_config["effort"] = effort
+def _error_message(exc: urllib.error.HTTPError) -> str:
+    """Liest die Fehlermeldung aus dem JSON-Fehlerkörper der Gemini-API."""
     try:
-        response = client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=max_tokens,
-            output_config=output_config,
-            messages=[{"role": "user", "content": prompt}],
+        payload = json.loads(exc.read().decode("utf-8"))
+        err = payload.get("error") or {}
+        parts = [str(err.get("status") or ""), str(err.get("message") or "")]
+        return " ".join(p for p in parts if p) or str(exc)
+    except Exception:
+        return str(exc)
+
+
+def _post(url: str, body: dict, key: str) -> dict:
+    """Ein HTTP-POST an die Gemini-API; wiederholt bei Limit- und Serverfehlern."""
+    data = json.dumps(body).encode("utf-8")
+    last_exc: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        req = urllib.request.Request(
+            url,
+            data=data,
+            method="POST",
+            headers={"Content-Type": "application/json", "x-goog-api-key": key},
         )
-    except anthropic.AuthenticationError as exc:
-        raise AIError("Der Anthropic-API-Key wird nicht akzeptiert.") from exc
-    except anthropic.RateLimitError as exc:
-        raise AIError("Anthropic-Limit erreicht. Bitte gleich nochmal versuchen.") from exc
-    except anthropic.BadRequestError as exc:
-        log.error("Anthropic lehnt die Anfrage ab (Modell %s): %s", ANTHROPIC_MODEL, exc.message)
-        raise AIError(
-            f"Die Anfrage wurde abgelehnt. Passt ANTHROPIC_MODEL ({ANTHROPIC_MODEL})?"
-        ) from exc
-    except anthropic.APIStatusError as exc:
-        log.error("Anthropic-Fehler %s: %s", exc.status_code, exc.message)
-        raise AIError("Die KI-Anfrage ist fehlgeschlagen.") from exc
-    except anthropic.APIConnectionError as exc:
-        raise AIError("Keine Verbindung zur Anthropic-API.") from exc
-    except Exception as exc:  # SDK-Änderungen o. Ä. dürfen keine 500-Seite erzeugen
-        log.exception("Unerwarteter Fehler beim Anthropic-Aufruf")
+        try:
+            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = _error_message(exc)
+            status = exc.code
+            if status in (400, 401, 403):
+                # Ungültiger Key oder abgelehnte Anfrage – Wiederholen hilft nicht.
+                log.error(
+                    "Gemini lehnt die Anfrage ab (%s, Modell %s): %s",
+                    status, GEMINI_MODEL, detail,
+                )
+                if status in (401, 403) or "API_KEY" in detail.upper():
+                    raise AIError("Der Gemini-API-Key wird nicht akzeptiert.") from exc
+                raise AIError(
+                    f"Die Anfrage wurde abgelehnt. Passt GEMINI_MODEL ({GEMINI_MODEL})?"
+                ) from exc
+            if status == 404:
+                log.error("Gemini kennt das Modell %s nicht: %s", GEMINI_MODEL, detail)
+                raise AIError(f"Das Modell {GEMINI_MODEL} ist unbekannt.") from exc
+            # 429 (Limit) und 5xx: einmal wiederholen, dann aufgeben.
+            log.warning("Gemini-Fehler %s (Versuch %d): %s", status, attempt + 1, detail)
+            last_exc = exc
+        except (urllib.error.URLError, socket.timeout, TimeoutError, OSError) as exc:
+            log.warning("Keine Verbindung zu Gemini (Versuch %d): %s", attempt + 1, exc)
+            last_exc = exc
+
+    if isinstance(last_exc, urllib.error.HTTPError):
+        if last_exc.code == 429:
+            raise AIError(
+                "Gemini-Limit erreicht. Bitte gleich nochmal versuchen."
+            ) from last_exc
+        raise AIError("Die KI-Anfrage ist fehlgeschlagen.") from last_exc
+    raise AIError("Keine Verbindung zur Gemini-API.") from last_exc
+
+
+def _json_call(prompt: str, schema: dict, max_tokens: int) -> dict:
+    key = _api_key()
+    body = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            # responseJsonSchema nimmt normales JSON Schema an und behält die
+            # Reihenfolge der Felder bei – wichtig, weil unser Mahlzeit-Schema
+            # darauf baut, dass die Bestandteile vor der Summe erzeugt werden.
+            "responseJsonSchema": schema,
+            "maxOutputTokens": max_tokens,
+            "temperature": 0.2,
+        },
+    }
+    url = GEMINI_ENDPOINT.format(model=GEMINI_MODEL)
+    try:
+        response = _post(url, body, key)
+    except AIError:
+        raise
+    except Exception as exc:  # Unerwartetes darf keine 500-Seite erzeugen
+        log.exception("Unerwarteter Fehler beim Gemini-Aufruf")
         raise AIError("Die KI-Anfrage ist fehlgeschlagen.") from exc
 
-    # stop_reason muss vor dem Zugriff auf content geprüft werden: bei einer
-    # Ablehnung ist content leer oder unvollständig.
-    if response.stop_reason == "refusal":
+    # Wurde schon der Prompt blockiert, gibt es keine Kandidaten.
+    feedback = response.get("promptFeedback") or {}
+    if feedback.get("blockReason"):
+        log.error("Gemini hat den Prompt blockiert: %s", feedback.get("blockReason"))
         raise AIError("Die KI hat diese Anfrage abgelehnt.")
-    if response.stop_reason == "max_tokens":
-        # Auf Modellen mit aktivem Thinking teilen sich Denk- und Antworttokens
-        # das max_tokens-Budget; hier wurde es ausgeschöpft.
-        log.error(
-            "max_tokens (%d) erschöpft – Budget in ai.py erhöhen oder effort senken",
-            max_tokens,
-        )
-        raise AIError("Die Antwort wurde abgeschnitten. Bitte nochmal versuchen.")
 
-    text = next((b.text for b in response.content if b.type == "text"), None)
-    if not text:
+    candidates = response.get("candidates") or []
+    if not candidates:
+        raise AIError("Von der KI kam keine verwertbare Antwort.")
+    candidate = candidates[0]
+    finish = candidate.get("finishReason")
+    if finish == "MAX_TOKENS":
+        # Bei Modellen mit Thinking teilen sich Denk- und Antworttokens das
+        # Budget; hier wurde es ausgeschöpft.
+        log.error("maxOutputTokens (%d) erschöpft – Budget in ai.py erhöhen", max_tokens)
+        raise AIError("Die Antwort wurde abgeschnitten. Bitte nochmal versuchen.")
+    if finish in ("SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"):
+        log.error("Gemini hat die Antwort abgebrochen: %s", finish)
+        raise AIError("Die KI hat diese Anfrage abgelehnt.")
+
+    parts = (candidate.get("content") or {}).get("parts") or []
+    # Denk-Teile (thought=true) überspringen, nur die eigentliche Antwort nehmen.
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    if not text.strip():
         raise AIError("Von der KI kam keine verwertbare Antwort.")
     try:
         return json.loads(text)
@@ -198,7 +252,6 @@ def estimate_meal(description: str, direction: str = "gain") -> dict:
     result = _json_call(
         MEAL_PROMPT + uncertainty + "\n\nAngabe: " + description,
         MEAL_SCHEMA,
-        effort="low",
         # Großzügig, weil Denk- und Antworttokens sich das Budget teilen.
         max_tokens=8192,
     )
@@ -332,7 +385,7 @@ def coach_analysis(data: dict, direction: str = "gain") -> dict:
         + "\n\nHier sind die Daten als JSON:\n"
         + json.dumps(data, ensure_ascii=False, sort_keys=True, indent=1)
     )
-    result = _json_call(prompt, COACH_SCHEMA, effort="medium", max_tokens=16000)
+    result = _json_call(prompt, COACH_SCHEMA, max_tokens=16000)
     tips = [str(t).strip() for t in (result.get("tips") or []) if str(t).strip()]
     return {
         "status": result.get("status") or "no_data",
