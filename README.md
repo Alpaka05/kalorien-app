@@ -1,13 +1,14 @@
 # Kalorien-Tagebuch – Self-Hosted
 
 Kleine Web-App zum Kalorienzählen: Du schreibst in normaler Sprache hin, was du
-gegessen hast, Claude schätzt Kalorien und Eiweiß, und die App zeigt dir, wie
+gegessen hast, Gemini schätzt Kalorien und Eiweiß, und die App zeigt dir, wie
 nah du an deinem Tagesziel bist. In den Einstellungen legst du fest, ob du
 **zunehmen** oder **abnehmen** willst – davon hängt ab, ob das Tagesziel als
 Untergrenze oder als Obergrenze gelesen wird.
 
-Läuft komplett auf dem eigenen Server. Außer der Anthropic-API für die
-Schätzungen wird kein externer Dienst gebraucht.
+Läuft komplett auf dem eigenen Server. Außer der Gemini-API für die
+Schätzungen wird kein externer Dienst gebraucht – und die ist im Free Tier
+von Google AI Studio kostenlos.
 
 ## Funktionen
 
@@ -31,7 +32,7 @@ Schätzungen wird kein externer Dienst gebraucht.
 ## 1. Voraussetzungen
 
 - Docker + Docker Compose auf dem Zielrechner (z. B. eine LXC/VM im Proxmox-Home-Lab)
-- Ein Anthropic API-Key: https://console.anthropic.com/settings/keys
+- Ein Gemini API-Key (kostenlos): https://aistudio.google.com/apikey
 - Eine Domain oder Subdomain, die auf den Server zeigt (siehe Schritt 4)
 
 Für einen unprivilegierten LXC-Container in Proxmox muss unter
@@ -41,7 +42,7 @@ Für einen unprivilegierten LXC-Container in Proxmox muss unter
 
 ```bash
 cp .env.example .env
-# .env öffnen und mindestens ANTHROPIC_API_KEY eintragen
+# .env öffnen und mindestens GEMINI_API_KEY eintragen
 
 docker compose up -d --build
 ```
@@ -105,7 +106,7 @@ in einer Fehlermeldung nach außen gegeben.
 
 Standardmäßig darf sich nur das **erste** Konto anlegen – deins. Danach ist die
 Registrierung zu. Das ist Absicht: Die App ist meist öffentlich erreichbar, und
-ein fremdes Konto würde deine Anthropic-Kosten verursachen.
+ein fremdes Konto würde dein Gemini-Kontingent aufbrauchen.
 
 Weitere Personen schaltest du in der `.env` frei (deine Adresse mit aufführen):
 
@@ -170,19 +171,22 @@ bleiben erhalten.
 
 ## Kosten und Modellwahl
 
-Die einzigen laufenden Kosten sind Anthropic-API-Aufrufe. Standardmäßig läuft die
-App auf `claude-haiku-4-5` – dem günstigsten Modell, das für Kalorienschätzungen
-in der Praxis gut ausreicht. Bei privater Nutzung liegt das im Bereich von
-Cent-Beträgen pro Monat.
+Die App nutzt die Gemini-API von Google. Mit einem Key aus Google AI Studio
+läuft sie im **Free Tier** – ohne Kreditkarte und ohne laufende Kosten.
+Standardmäßig wird `gemini-3.8-flash` verwendet; der Free Tier erlaubt dafür
+einige hundert Anfragen pro Tag, was für ein privates Tagebuch weit reicht.
 
-Wenn die Schätzungen genauer werden sollen, in der `.env`:
+Wird das Tageslimit trotzdem knapp (Fehlermeldung „Gemini-Limit erreicht"), in
+der `.env` auf das Modell mit dem großzügigsten Kontingent wechseln:
 
 ```
-ANTHROPIC_MODEL=claude-sonnet-5
+GEMINI_MODEL=gemini-2.5-flash-lite
 ```
 
 Ein Aufruf entsteht pro neuem Freitext-Eintrag und einmal täglich für die
-Einschätzung; Einträge über die Schnellwahl-Chips kosten nichts.
+Einschätzung; Einträge über die Schnellwahl-Chips brauchen keinen Aufruf.
+Die aktuellen Limits deines Kontos zeigt Google unter
+https://aistudio.google.com/rate-limit.
 
 ## Konfiguration
 
@@ -191,8 +195,8 @@ wichtigsten:
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | – | Pflicht |
-| `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Modell für Schätzung und Einschätzung |
+| `GEMINI_API_KEY` | – | Pflicht |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Modell für Schätzung und Einschätzung |
 | `APP_TZ` | `Europe/Berlin` | Zeitzone für Datum und Uhrzeit der Einträge |
 | `COOKIE_SECURE` | automatisch | Richtet sich nach HTTP/HTTPS; nur zum Überschreiben |
 | `SECRET_KEY` | automatisch | Ändern macht alle Anmeldungen ungültig |
