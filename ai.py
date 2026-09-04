@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import socket
+import time
 import urllib.error
 import urllib.request
 
@@ -29,15 +30,21 @@ GEMINI_ENDPOINT = (
 
 # Gemini-Modelle denken standardmäßig auf Stufe "medium" vor jeder Antwort.
 # Für eine Kalorienschätzung ist das unnötig und kostet Sekunden, deshalb wird
-# die Denkstufe pro Aufruf gesetzt (Schätzung "low", Einschätzung "medium").
+# die Denkstufe pro Aufruf gesetzt (derzeit "low" für beide Aufrufe).
 # Nicht jedes Modell kennt den Parameter; lehnt Gemini ihn ab, wird der Aufruf
 # einmal ohne ihn wiederholt und der Parameter danach nicht mehr gesendet.
 # Mit AI_THINKING=off lässt er sich von vornherein abschalten.
 _thinking_enabled = os.environ.get("AI_THINKING", "").strip().lower() != "off"
 
-# Zeitbudget so wählen, dass ein Request inklusive Wiederholung deutlich unter
-# dem 100-Sekunden-Timeout eines Cloudflare-Tunnels bleibt.
+# Zeitbudget: Die App muss auf jeden Fall selbst antworten, bevor der Proxy
+# davor die Verbindung kappt – Nginx tut das standardmäßig nach 60 Sekunden,
+# ein Cloudflare-Tunnel nach 100. Sonst bekommt das Frontend eine HTML-Seite
+# statt JSON und kann nur "Da ist etwas schiefgelaufen" anzeigen. TOTAL_DEADLINE
+# gilt deshalb für alle Versuche zusammen; ein zweiter Versuch bekommt nur die
+# Restzeit und findet gar nicht statt, wenn sie zu knapp ist.
 REQUEST_TIMEOUT = 30.0
+TOTAL_DEADLINE = 50.0
+MIN_RETRY_TIME = 8.0
 MAX_RETRIES = 1
 
 
@@ -67,11 +74,19 @@ def _error_message(exc: urllib.error.HTTPError) -> str:
         return str(exc)
 
 
-def _post(url: str, body: dict, key: str) -> dict:
-    """Ein HTTP-POST an die Gemini-API; wiederholt bei Limit- und Serverfehlern."""
+def _post(url: str, body: dict, key: str, deadline: float) -> dict:
+    """Ein HTTP-POST an die Gemini-API; wiederholt bei Limit- und Serverfehlern.
+
+    `deadline` ist ein Zeitpunkt (time.monotonic), bis zu dem die Antwort da sein
+    muss – über alle Versuche hinweg.
+    """
     data = json.dumps(body).encode("utf-8")
     last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES + 1):
+        remaining = deadline - time.monotonic()
+        if attempt > 0 and remaining < MIN_RETRY_TIME:
+            log.warning("Keine Zeit mehr für einen weiteren Gemini-Versuch")
+            break
         req = urllib.request.Request(
             url,
             data=data,
@@ -79,7 +94,8 @@ def _post(url: str, body: dict, key: str) -> dict:
             headers={"Content-Type": "application/json", "x-goog-api-key": key},
         )
         try:
-            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
+            timeout = max(1.0, min(REQUEST_TIMEOUT, remaining))
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = _error_message(exc)
@@ -97,7 +113,10 @@ def _post(url: str, body: dict, key: str) -> dict:
             log.warning("Gemini-Fehler %s (Versuch %d): %s", status, attempt + 1, detail)
             last_exc = exc
         except (urllib.error.URLError, socket.timeout, TimeoutError, OSError) as exc:
-            log.warning("Keine Verbindung zu Gemini (Versuch %d): %s", attempt + 1, exc)
+            if _is_timeout(exc):
+                log.warning("Gemini antwortet nicht rechtzeitig (Versuch %d)", attempt + 1)
+            else:
+                log.warning("Keine Verbindung zu Gemini (Versuch %d): %s", attempt + 1, exc)
             last_exc = exc
 
     if isinstance(last_exc, urllib.error.HTTPError):
@@ -106,7 +125,19 @@ def _post(url: str, body: dict, key: str) -> dict:
                 "Gemini-Limit erreicht. Bitte gleich nochmal versuchen."
             ) from last_exc
         raise AIError("Die KI-Anfrage ist fehlgeschlagen.") from last_exc
+    if last_exc is not None and _is_timeout(last_exc):
+        raise AIError(
+            "Gemini hat nicht rechtzeitig geantwortet. Bitte nochmal versuchen."
+        ) from last_exc
     raise AIError("Keine Verbindung zur Gemini-API.") from last_exc
+
+
+def _is_timeout(exc: Exception) -> bool:
+    if isinstance(exc, (socket.timeout, TimeoutError)):
+        return True
+    return isinstance(exc, urllib.error.URLError) and isinstance(
+        exc.reason, (socket.timeout, TimeoutError)
+    )
 
 
 def _build_body(prompt: str, schema: dict, max_tokens: int, thinking: str | None) -> dict:
@@ -131,12 +162,14 @@ def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str) -> dic
     global _thinking_enabled
     key = _api_key()
     url = GEMINI_ENDPOINT.format(model=GEMINI_MODEL)
+    deadline = time.monotonic() + TOTAL_DEADLINE
     try:
         try:
             response = _post(
                 url,
                 _build_body(prompt, schema, max_tokens, thinking if _thinking_enabled else None),
                 key,
+                deadline,
             )
         except _BadRequest as exc:
             if not _thinking_enabled:
@@ -149,7 +182,7 @@ def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str) -> dic
                 GEMINI_MODEL, exc,
             )
             _thinking_enabled = False
-            response = _post(url, _build_body(prompt, schema, max_tokens, None), key)
+            response = _post(url, _build_body(prompt, schema, max_tokens, None), key, deadline)
     except _BadRequest as exc:
         log.error("Gemini lehnt die Anfrage ab (Modell %s): %s", GEMINI_MODEL, exc)
         raise AIError(
@@ -422,7 +455,10 @@ def coach_analysis(data: dict, direction: str = "gain") -> dict:
         + "\n\nHier sind die Daten als JSON:\n"
         + json.dumps(data, ensure_ascii=False, sort_keys=True, indent=1)
     )
-    result = _json_call(prompt, COACH_SCHEMA, max_tokens=16000, thinking="medium")
+    # Niedrige Denkstufe auch hier: Die Einschätzung fasst 14 Tageswerte
+    # zusammen, dafür reicht sie, und mit "medium" lief der Aufruf auf dem Free
+    # Tier regelmäßig in den Proxy-Timeout.
+    result = _json_call(prompt, COACH_SCHEMA, max_tokens=16000, thinking="low")
     tips = [str(t).strip() for t in (result.get("tips") or []) if str(t).strip()]
     return {
         "status": result.get("status") or "no_data",
