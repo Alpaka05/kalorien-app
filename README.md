@@ -176,8 +176,11 @@ läuft sie im **Free Tier** – ohne Kreditkarte und ohne laufende Kosten.
 Standardmäßig wird `gemini-3.8-flash` verwendet; der Free Tier erlaubt dafür
 einige hundert Anfragen pro Tag, was für ein privates Tagebuch weit reicht.
 
-Wird das Tageslimit trotzdem knapp (Fehlermeldung „Gemini-Limit erreicht"), in
-der `.env` auf das Modell mit dem großzügigsten Kontingent wechseln:
+Im Free Tier ist das neueste Modell zu Stoßzeiten oft überlastet („high
+demand"). Die App weicht dann automatisch auf `gemini-2.5-flash` und
+`gemini-2.5-flash-lite` aus; im Log steht, welches Modell geantwortet hat.
+Wer das von vornherein vermeiden will, wählt in der `.env` direkt ein Modell
+mit weniger Andrang und dem großzügigsten Kontingent:
 
 ```
 GEMINI_MODEL=gemini-2.5-flash-lite
@@ -197,6 +200,7 @@ wichtigsten:
 |---|---|---|
 | `GEMINI_API_KEY` | – | Pflicht |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Modell für Schätzung und Einschätzung |
+| `GEMINI_FALLBACK_MODELS` | `gemini-2.5-flash,gemini-2.5-flash-lite` | Ausweichmodelle, wenn das Hauptmodell überlastet oder am Limit ist |
 | `AI_THINKING` | an | `off` schaltet die Denkstufe des Modells ab |
 | `APP_TZ` | `Europe/Berlin` | Zeitzone für Datum und Uhrzeit der Einträge |
 | `COOKIE_SECURE` | automatisch | Richtet sich nach HTTP/HTTPS; nur zum Überschreiben |
