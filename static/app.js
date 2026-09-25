@@ -896,8 +896,27 @@ function openSettings() {
   $('name-input').value = state.me.display_name || '';
   $('presets-input').value = presetsEnabled() ? 'on' : 'off';
   $('theme-input').value = Theme.get();
+  fillAiModelOptions();
   setMessage($('settings-msg'), '');
   $('settings-modal').hidden = false;
+}
+
+// Nur Admin-Konten bekommen die Modellliste von /api/me. Für alle anderen
+// bleibt das Feld verborgen – und der Server lehnt eine Wahl ohnehin ab.
+function fillAiModelOptions() {
+  const field = $('ai-model-field');
+  const select = $('ai-model-input');
+  field.hidden = !state.me.is_admin;
+  if (!state.me.is_admin) return;
+  select.textContent = '';
+  (state.me.ai_models || []).forEach((model) => {
+    const option = document.createElement('option');
+    option.value = model.id;
+    option.textContent = model.label + (model.available ? '' : ' – ANTHROPIC_API_KEY fehlt');
+    option.disabled = !model.available;
+    select.appendChild(option);
+  });
+  select.value = state.me.ai_model || 'gemini';
 }
 
 async function saveSettings() {
@@ -915,6 +934,7 @@ async function saveSettings() {
           day_start_hour: $('day-start-input').value,
           display_name: $('name-input').value.trim(),
           show_presets: $('presets-input').value === 'on',
+          ...(state.me.is_admin ? { ai_model: $('ai-model-input').value } : {}),
         }),
       })
     );
