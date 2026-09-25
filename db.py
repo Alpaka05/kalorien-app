@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS users (
     goal_direction  TEXT NOT NULL DEFAULT 'gain',
     -- 1 = Schnellwahl-Chips unter dem Eingabefeld zeigen, 0 = ausblenden.
     show_presets    INTEGER NOT NULL DEFAULT 1,
+    -- Gewähltes KI-Modell (Schlüssel aus ai.AI_MODELS). Wirkt nur für
+    -- Admin-Konten; alle anderen laufen immer über Gemini.
+    ai_model        TEXT NOT NULL DEFAULT 'gemini',
     created_at      TEXT NOT NULL
 );
 
@@ -205,6 +208,10 @@ def init_db() -> None:
         if "show_presets" not in user_cols:
             conn.execute(
                 "ALTER TABLE users ADD COLUMN show_presets INTEGER NOT NULL DEFAULT 1"
+            )
+        if "ai_model" not in user_cols:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN ai_model TEXT NOT NULL DEFAULT 'gemini'"
             )
         conn.commit()
         conn.executescript(INDEXES)

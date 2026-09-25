@@ -199,6 +199,20 @@ Einschätzung; Einträge über die Schnellwahl-Chips brauchen keinen Aufruf.
 Die aktuellen Limits deines Kontos zeigt Google unter
 https://aistudio.google.com/rate-limit.
 
+### Claude für Admin-Konten
+
+Wer in `ADMIN_EMAILS` steht, sieht in den Einstellungen das Feld „KI-Modell“
+und kann für das eigene Konto **Claude Opus 5.5** statt Gemini wählen – für
+Kalorienschätzungen und die Einschätzung. Alle anderen Konten sehen das Feld
+nicht und laufen immer über Gemini; der Server prüft das bei jeder Anfrage,
+unabhängig davon, was im Browser steht. Wird eine Adresse aus der Liste
+gestrichen, fällt das Konto sofort auf Gemini zurück.
+
+Claude wird über den eigenen `ANTHROPIC_API_KEY` abgerechnet (4 $ pro Million
+Eingabe-, 20 $ pro Million Ausgabetokens; grob 1–2 Cent pro Schätzung).
+Antwortet Claude nicht, ist das Guthaben leer oder lehnt es eine Anfrage ab,
+springt für diese Anfrage automatisch Gemini ein; der Grund steht im Log.
+
 ## Konfiguration
 
 Alle Variablen sind in [`.env.example`](.env.example) dokumentiert. Die
@@ -210,6 +224,9 @@ wichtigsten:
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Modell für Schätzung und Einschätzung |
 | `GEMINI_FALLBACK_MODELS` | `gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite` | Ausweichmodelle, wenn das Hauptmodell überlastet oder am Limit ist |
 | `AI_THINKING` | an | `off` schaltet die Denkstufe des Modells ab |
+| `ADMIN_EMAILS` | leer | Kommaliste der Admin-Konten; nur diese können in den Einstellungen Claude wählen |
+| `ANTHROPIC_API_KEY` | – | Nötig, damit Admins Claude nutzen können |
+| `AI_CLAUDE_EFFORT` | `medium` | Denktiefe von Claude (`low` ist schneller und günstiger) |
 | `APP_TZ` | `Europe/Berlin` | Zeitzone für Datum und Uhrzeit der Einträge |
 | `COOKIE_SECURE` | automatisch | Richtet sich nach HTTP/HTTPS; nur zum Überschreiben |
 | `SECRET_KEY` | automatisch | Ändern macht alle Anmeldungen ungültig |

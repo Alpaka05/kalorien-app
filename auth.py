@@ -129,6 +129,17 @@ def _allowlist() -> set[str]:
     return {part.strip().lower() for part in raw.split(",") if part.strip()}
 
 
+def is_admin(email: str) -> bool:
+    """Admin-Konten stehen in ADMIN_EMAILS, nicht in der Datenbank.
+
+    So lässt sich die Berechtigung nicht über die App selbst erlangen: wer
+    Admin ist, entscheidet allein, wer die .env des Servers bearbeiten kann.
+    """
+    raw = os.environ.get("ADMIN_EMAILS", "")
+    admins = {part.strip().lower() for part in raw.split(",") if part.strip()}
+    return (email or "").strip().lower() in admins
+
+
 def _registration_open() -> bool | None:
     """True/False bei ausdrücklicher Angabe, sonst None (= Standardverhalten)."""
     raw = os.environ.get("REGISTRATION_OPEN", "").strip().lower()
