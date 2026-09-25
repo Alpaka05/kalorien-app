@@ -403,8 +403,20 @@ a:hover { color: var(--accent); }
   background: none; border: none; padding: 0; height: 100%; justify-content: flex-end;
   cursor: pointer; min-width: 0;
 }
-.week-col:hover .week-bar { background: var(--accent-dark); }
-.week-col:active { transform: none; }
+/* Die Spalte ist ein <button> und erbt damit die allgemeine Hover-Regel
+   (button:hover:not(:disabled) füllt mit --accent-dark). Die ist spezifischer
+   als .week-col und färbte deshalb die ganze Spalte samt Beschriftung grün –
+   vom Balken war nichts mehr zu sehen. */
+.week-col:hover:not(:disabled) { background: none; }
+.week-col:active:not(:disabled) { transform: none; }
+/* Hover zeichnet nur einen hellen Rahmen um den Balken und lässt seine Farbe
+   in Ruhe: die Farbe sagt, ob das Ziel erreicht wurde, und das soll beim
+   Überfahren lesbar bleiben.
+   Nur mit echter Maus: auf dem Handy bliebe der Rahmen nach dem Antippen
+   am Balken hängen. */
+@media (hover: hover) {
+  .week-col:hover .week-bar { outline-color: var(--text-muted); }
+}
 /* Die Spalte ist ein Button über die volle Diagrammhöhe. Ohne diese Regel
    zeichnet der Browser seinen Fokusring um die ganze Spalte – hervorgehoben
    werden soll aber nur die Säule selbst. */
@@ -413,7 +425,10 @@ a:hover { color: var(--accent); }
 .week-col:focus-visible .week-bar { outline: 2px solid var(--accent); outline-offset: 2px; }
 .week-bar {
   width: 100%; max-width: 34px; border-radius: 5px 5px 0 0;
-  background: var(--border-strong); transition: background var(--dur-fast) var(--ease);
+  background: var(--border-strong);
+  transition: background var(--dur-fast) var(--ease),
+              outline-color var(--dur-fast) var(--ease);
+  outline: 1px solid transparent; outline-offset: 2px;
   /* Nicht stauchen lassen: sonst werden alle hohen Tage auf dieselbe Höhe
      gequetscht und der höchste Balken ist immer zu kurz. */
   flex-shrink: 0;
@@ -422,7 +437,6 @@ a:hover { color: var(--accent); }
 /* Nur beim Abnehmen: ein Tag über der Grenze. Dieselbe Bedeutung wie die
    bernsteinfarbene Notiz auf der Tageskarte, deshalb dieselbe Farbe. */
 .week-bar.over { background: var(--warn); }
-.week-col:hover .week-bar.over,
 .week-col.selected .week-bar.over { background: var(--warn-strong); }
 /* Heute nur dezent markieren, damit es der Auswahl nicht die Show stiehlt. */
 .week-bar.today { box-shadow: inset 0 0 0 1px var(--accent-dark); }
