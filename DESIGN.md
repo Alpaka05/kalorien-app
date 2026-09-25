@@ -464,7 +464,7 @@ Three details carry the craft:
 
 A dashed Hairline Strong goal line crosses the chart. The current goal is not labeled
 on the line — there it always covered the total of a day close to the goal — but in a
-small legend (dashed swatch plus value in 10.5px mono) at the right end of the note
+small legend (the value in 10.5px mono) at the right end of the note
 row under the chart, so the bars keep their full width. Older goals within the range
 keep an inline label on their own stretch of line, backed by the page color. The label
 names what the line is in that mode — "Ziel" when gaining, "Grenze" when losing.

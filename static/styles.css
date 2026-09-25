@@ -459,10 +459,6 @@ a:hover { color: var(--accent); }
   font-size: 10.5px; font-family: var(--mono); color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-.chart-goal::before {
-  content: ""; display: inline-block; width: 14px; margin-right: 6px;
-  border-top: 1px dashed var(--border-strong); vertical-align: middle;
-}
 .chart-goal[hidden] { display: none; }
 
 .day-detail {
