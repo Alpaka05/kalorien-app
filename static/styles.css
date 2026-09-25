@@ -46,7 +46,11 @@
   --shadow-overlay: 0 12px 32px -8px rgba(43, 42, 38, 0.20),
                     0 2px 8px -2px rgba(43, 42, 38, 0.10);
 
-  --ring: 0 0 0 3px var(--accent-bg);
+  /* Verlängert den 1px-Rand des fokussierten Felds nach außen zu einer
+     einzigen, gleichmäßigen 2px-Linie in --accent – so breit wie der
+     Tastaturfokus aller anderen Elemente. Vorher lag ein 3px breiter Schein in
+     --accent-bg um den Rand, das ergab zwei Linien unterschiedlicher Stärke. */
+  --ring: 0 0 0 1px var(--accent);
 
   /* Zustandswechsel sind Rückmeldung, keine Animation – deshalb kurz.
      --dur-slow gehört allein dem Zielbalken. */
