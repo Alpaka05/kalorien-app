@@ -149,7 +149,7 @@ consumer-app maximalism.
 
 **Key Characteristics:**
 
-- Cream-paper ground with white surfaces; a warm-brown dark mode, never pure black.
+- Cream-paper ground with white surfaces; a warm-brown dark mode, never pure black (only the opt-in OLED scheme uses a #000000 ground).
 - One accent — a desaturated garden green — carrying every affirmative signal.
 - Monospace for every comparable number; system sans for all prose.
 - A single 560px column, no navigation, one settings modal.
@@ -218,6 +218,10 @@ but green never means two things at once within one account.
 neutral gray). The stated reason is in the stylesheet itself: a cool dark makes the
 cream original read as a different app. Any new dark value must keep the same brown
 cast.
+The single exception is the opt-in **OLED** scheme (`data-oled` on top of
+`data-theme="dark"`): its page ground is `#000000` so OLED pixels switch off. It is
+only ever an explicit choice in settings, never what "Automatisch" resolves to, and
+its raised surfaces (`#11100F`) and hairlines still carry the brown cast.
 
 **The Readable Muted Rule.** `--text-muted` is a text color, not a decoration: it
 carries timestamps, hints, placeholders, and the disclaimer. It must clear 4.5:1

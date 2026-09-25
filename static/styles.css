@@ -98,6 +98,26 @@
                     0 2px 8px -2px rgba(0, 0, 0, 0.40);
 }
 
+/* OLED: der Dunkelmodus mit echtem Schwarz als Grund.
+ *
+ * Eine ausdrückliche Wahl in den Einstellungen, nie das Ergebnis von
+ * "Automatisch": auf OLED-Bildschirmen bleiben schwarze Pixel aus, das spart
+ * Strom und wirkt nachts ruhiger. Nur der Seitengrund ist reines Schwarz;
+ * Karten und Felder heben sich knapp davon ab und behalten den warmen
+ * Braunstich, damit Flächen nicht allein an ihrem Rand zu erkennen sind.
+ * Alle übrigen Farben erbt der Block vom Dunkelmodus – theme.js setzt dafür
+ * data-theme="dark" zusätzlich zu data-oled.
+ */
+:root[data-theme="dark"][data-oled] {
+  --bg: #000000;
+  --surface: #11100F;
+  --border: #24221F;
+  --border-strong: #45423C;
+  --backdrop: rgba(0, 0, 0, 0.72);
+  --shadow-overlay: 0 16px 40px -8px rgba(0, 0, 0, 0.80),
+                    0 2px 8px -2px rgba(0, 0, 0, 0.60);
+}
+
 * { box-sizing: border-box; }
 
 body {
