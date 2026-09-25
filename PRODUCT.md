@@ -143,7 +143,7 @@ user's own logged data.
 ## Accessibility & Inclusion
 
 No specific requirement or standard has been established. Existing practice worth
-preserving: real `aria-label`s and dialog roles on icon-only controls and the
-settings modal, `inputmode` hints so phone keyboards match the field, both color
+preserving: real `aria-label`s on icon-only controls, focus that follows the switch
+between the main and settings views, `inputmode` hints so phone keyboards match the field, both color
 schemes declared so browser-native controls follow the theme, and a resolved
 `data-theme` written before first paint to avoid a flash.

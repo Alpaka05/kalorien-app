@@ -23,24 +23,16 @@
      verwendet. */
   --warn: #976927;
   --warn-bg: #F7EFE0;
-  /* Schrift auf gefüllten Buttons und der Schleier hinter dem Dialog. Beide
-     waren vorher fest verdrahtet – im Dunkelmodus braucht es andere Werte. */
+  /* Schrift auf gefüllten Buttons. War vorher fest verdrahtet – im
+     Dunkelmodus braucht es einen anderen Wert. */
   --on-accent: #FFFFFF;
-  --backdrop: rgba(43, 42, 38, 0.4);
 
   /* Radien wachsen mit der Fläche: 8 für 32px-Icons, 12 für Felder und
-     Buttons, 14 für Karten und Panels, 18 für den Dialog. --radius behält
-     seinen Namen, weil es der Standardwert für alles Interaktive ist. */
+     Buttons, 14 für Karten und Panels. --radius behält seinen Namen, weil es
+     der Standardwert für alles Interaktive ist. */
   --radius-sm: 8px;
   --radius: 12px;
   --radius-lg: 14px;
-  --radius-xl: 18px;
-
-  /* Der einzige Schatten im System, und nur für den Dialog: er trennt eine
-     Ebene von der Seite, statt Flächen zu dekorieren. Warm getönt aus der
-     Textfarbe, mit Versatz und weichem Verlauf. */
-  --shadow-overlay: 0 12px 32px -8px rgba(43, 42, 38, 0.20),
-                    0 2px 8px -2px rgba(43, 42, 38, 0.10);
 
   /* Verlängert den 1px-Rand des fokussierten Felds nach außen zu einer
      einzigen, gleichmäßigen 2px-Linie in --accent – so breit wie der
@@ -92,9 +84,6 @@
   --warn: #D2A25C;
   --warn-bg: #332A1B;
   --on-accent: #10201A;
-  --backdrop: rgba(8, 8, 7, 0.62);
-  --shadow-overlay: 0 16px 40px -8px rgba(0, 0, 0, 0.64),
-                    0 2px 8px -2px rgba(0, 0, 0, 0.40);
 }
 
 /* OLED: der Dunkelmodus mit echtem Schwarz als Grund.
@@ -112,9 +101,6 @@
   --surface: #11100F;
   --border: #24221F;
   --border-strong: #45423C;
-  --backdrop: rgba(0, 0, 0, 0.72);
-  --shadow-overlay: 0 16px 40px -8px rgba(0, 0, 0, 0.80),
-                    0 2px 8px -2px rgba(0, 0, 0, 0.60);
 }
 
 * { box-sizing: border-box; }
@@ -291,8 +277,8 @@ button.menu-btn { display: inline-flex; align-items: center; justify-content: ce
 .menu-lines::after { top: 6px; }
 button.small { height: 32px; padding: 0 12px; font-size: 13.5px; }
 /* Ein Link ist ein Link, egal ob als <a> oder als <button> ausgezeichnet:
-   beide Varianten stehen im Dialog direkt untereinander und dürfen sich in
-   Größe und Farbe nicht unterscheiden. */
+   beide Varianten stehen in den Einstellungen direkt untereinander und dürfen
+   sich in Größe und Farbe nicht unterscheiden. */
 .link {
   color: var(--accent-dark);
   font-size: 13px; text-decoration: underline;
@@ -510,27 +496,21 @@ a:hover { color: var(--accent); }
 .weight-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .weight-row input { flex: 1; }
 
-.modal-backdrop {
-  position: fixed; inset: 0; background: var(--backdrop);
-  display: flex; align-items: flex-start; justify-content: center;
-  padding: 2rem 1.25rem; overflow-y: auto; z-index: 20;
-}
-.modal-backdrop[hidden] { display: none; }
-.modal-field[hidden] { display: none; }
-.modal {
-  background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-xl);
-  padding: 20px; width: 100%; max-width: 420px;
-  box-shadow: var(--shadow-overlay);
-}
-.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.modal-title { font-size: 16px; font-weight: 600; margin: 0; }
-.modal-field { margin-bottom: 14px; }
-.modal-field .field-label { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 5px; }
-.modal-hint { font-size: 12px; color: var(--text-muted); margin: 5px 0 0; line-height: 1.45; }
-.modal-actions { display: flex; gap: 8px; margin-top: 18px; }
-.modal-actions button { flex: 1; }
-.modal-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
-.modal-links { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+/* Die Einstellungen sind eine eigene Ansicht in derselben Spalte, kein
+   Dialog: sie ersetzen die Hauptansicht, also stehen sie auf demselben Grund,
+   ohne Schleier, Rahmen und Schatten. Der Kopf trägt den Zurück-Pfeil vor der
+   Überschrift und hält denselben Abstand zum Inhalt wie die Unterzeile der
+   Hauptansicht. */
+.page-head { display: flex; align-items: center; gap: 8px; margin: 0 0 1.75rem; }
+.page-head h1 { margin: 0; }
+.settings-field { margin-bottom: 14px; }
+.settings-field[hidden] { display: none; }
+.settings-field .field-label { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 5px; }
+.settings-hint { font-size: 12px; color: var(--text-muted); margin: 5px 0 0; line-height: 1.45; }
+.settings-actions { display: flex; gap: 8px; margin-top: 18px; }
+.settings-actions button { flex: 1; }
+.settings-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+.settings-links { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 
 .footnote { font-size: 12px; color: var(--text-muted); margin-top: 2rem; line-height: 1.5; text-wrap: pretty; }
 
