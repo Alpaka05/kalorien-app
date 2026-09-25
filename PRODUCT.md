@@ -73,8 +73,8 @@ navigate, which is what makes logging survivable day after day.
 ## Capabilities and Constraints
 
 Confirmed capabilities: free-text entry with AI-estimated kcal and protein, all
-values correctable afterward; a fixed quick-pick row of common meals and drinks
-with hard-coded values; a daily kcal goal read as a floor or a ceiling depending on
+values correctable afterward; a quick-pick row built from the account's own most
+frequent entries of the last 60 days, using the latest logged values; a daily kcal goal read as a floor or a ceiling depending on
 the account's goal direction, with a progress bar and remaining-kcal note; an
 optional protein goal; a daily AI assessment of the last 14 days, cached per day
 and manually refreshable; a 7/14/30-day history chart that pages
