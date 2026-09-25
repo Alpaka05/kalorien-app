@@ -472,8 +472,6 @@ def update_me():
             moved = rebucket_entries(g.conn, g.user["id"], old_start, new_start)
         if any(k in payload for k in ("kcal_goal", "protein_goal", "goal_direction")):
             record_goal_change(g.conn, g.user["id"])
-        # Die Einschätzung basiert auf Ziel und Tageszuordnung, ist also veraltet.
-        g.conn.execute("DELETE FROM coach_cache WHERE user_id = ?", (g.user["id"],))
         g.conn.commit()
 
     row = g.conn.execute(
@@ -625,7 +623,6 @@ def add_entry():
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (g.user["id"], entry_date, entry_time, normalized, kcal, protein, utc_now_iso()),
     )
-    g.conn.execute("DELETE FROM coach_cache WHERE user_id = ?", (g.user["id"],))
     g.conn.commit()
     row = g.conn.execute(
         'SELECT id, entry_date, entry_time, "desc", kcal, protein FROM entries WHERE id = ?',
@@ -727,7 +724,6 @@ def update_entry(entry_id: int):
     )
     if not cur.rowcount:
         return bad("Eintrag nicht gefunden.", 404)
-    g.conn.execute("DELETE FROM coach_cache WHERE user_id = ?", (g.user["id"],))
     g.conn.commit()
     row = g.conn.execute(
         'SELECT id, entry_date, entry_time, "desc", kcal, protein FROM entries WHERE id = ?',
@@ -744,7 +740,6 @@ def delete_entry(entry_id: int):
     )
     if not cur.rowcount:
         return bad("Eintrag nicht gefunden.", 404)
-    g.conn.execute("DELETE FROM coach_cache WHERE user_id = ?", (g.user["id"],))
     g.conn.commit()
     return jsonify({"ok": True})
 
@@ -856,7 +851,6 @@ def add_weight():
         "ON CONFLICT (user_id, weigh_date) DO UPDATE SET kg = excluded.kg",
         (g.user["id"], weigh_date, kg, utc_now_iso()),
     )
-    g.conn.execute("DELETE FROM coach_cache WHERE user_id = ?", (g.user["id"],))
     g.conn.commit()
     return jsonify({"ok": True, "date": weigh_date, "kg": kg}), 201
 
@@ -994,8 +988,28 @@ def coach():
     try:
         result = ai.coach_analysis(data, goal_direction(user))
     except ai.AIError as exc:
-        return bad(str(exc), 502)
+        # Lieber die letzte Einschätzung zeigen als eine Fehlermeldung: im Free
+        # Tier ist Gemini oft minutenlang überlastet, und eine Einschätzung von
+        # vor ein paar Einträgen ist immer noch nützlicher als keine. Deshalb
+        # löschen Änderungen an Einträgen, Gewicht oder Zielen den Cache auch
+        # nicht mehr – ob er noch gilt, entscheidet allein inputs_hash.
+        # Nach einem Wechsel der Zielrichtung wäre die alte Einschätzung
+        # falsch herum bewertet – dann doch lieber die Fehlermeldung.
+        fallback = g.conn.execute(
+            "SELECT payload FROM coach_cache WHERE user_id = ? "
+            "ORDER BY day DESC LIMIT 1",
+            (user["id"],),
+        ).fetchone()
+        payload = json.loads(fallback["payload"]) if fallback else {}
+        if payload.get("direction") != goal_direction(user):
+            return bad(str(exc), 502)
+        log.warning("Einschätzung fehlgeschlagen, zeige die letzte gespeicherte: %s", exc)
+        payload["cached"] = True
+        payload["stale"] = True
+        payload["notice"] = str(exc)
+        return jsonify(payload)
 
+    result["direction"] = goal_direction(user)
     g.conn.execute(
         "INSERT INTO coach_cache (user_id, day, inputs_hash, payload, created_at) "
         "VALUES (?, ?, ?, ?, ?) "
