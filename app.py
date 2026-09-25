@@ -455,6 +455,8 @@ def update_me():
         moved = 0
         if new_start is not None and new_start != old_start:
             moved = rebucket_entries(g.conn, g.user["id"], old_start, new_start)
+        if "kcal_goal" in payload or "protein_goal" in payload:
+            record_goal_change(g.conn, g.user["id"])
         # Die Einschätzung basiert auf Ziel und Tageszuordnung, ist also veraltet.
         g.conn.execute("DELETE FROM coach_cache WHERE user_id = ?", (g.user["id"],))
         g.conn.commit()
@@ -470,6 +472,41 @@ def update_me():
     result["goal_direction"] = goal_direction(row)
     result["moved_entries"] = moved if fields else 0
     return jsonify(result)
+
+
+def record_goal_change(conn, user_id: int) -> None:
+    """Hält das aktuelle Ziel im Verlauf fest, gültig ab dem heutigen Tag.
+
+    Mehrere Änderungen am selben Tag überschreiben sich; es zählt die letzte.
+    Frühere Tage behalten das Ziel, das an ihnen galt.
+    """
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    today = user_today(user)
+    previous = conn.execute(
+        "SELECT kcal_goal, protein_goal FROM goal_history "
+        "WHERE user_id = ? AND valid_from < ? ORDER BY valid_from DESC LIMIT 1",
+        (user_id, today),
+    ).fetchone()
+    if previous and (previous["kcal_goal"], previous["protein_goal"]) == (
+        user["kcal_goal"],
+        user["protein_goal"],
+    ):
+        # Zurück auf das Ziel von gestern: ein eigener Eintrag für heute wäre
+        # nur Rauschen.
+        conn.execute(
+            "DELETE FROM goal_history WHERE user_id = ? AND valid_from = ?",
+            (user_id, today),
+        )
+        return
+    conn.execute(
+        "INSERT INTO goal_history "
+        "(user_id, valid_from, kcal_goal, protein_goal, created_at) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT (user_id, valid_from) DO UPDATE SET "
+        "kcal_goal = excluded.kcal_goal, protein_goal = excluded.protein_goal, "
+        "created_at = excluded.created_at",
+        (user_id, today, user["kcal_goal"], user["protein_goal"], utc_now_iso()),
+    )
 
 
 def rebucket_entries(conn, user_id: int, old_start: int, new_start: int) -> int:
@@ -672,16 +709,21 @@ def summary():
         (g.user["id"], dates[0], dates[-1]),
     ).fetchall()
     by_date = {r["entry_date"]: r for r in rows}
+    goals = db.goals_by_date(g.conn, g.user["id"], dates)
 
     result = []
     for date_iso in dates:
         row = by_date.get(date_iso)
+        kcal_goal, protein_goal = goals[date_iso]
         result.append(
             {
                 "date": date_iso,
                 "total": round(row["total"], 1) if row else 0.0,
                 "protein": round(row["protein"], 1) if row else 0.0,
                 "entries": row["entries"] if row else 0,
+                # Das Ziel, das an diesem Tag galt – nicht das heutige.
+                "kcal_goal": kcal_goal,
+                "protein_goal": protein_goal,
             }
         )
     return jsonify(
@@ -775,12 +817,19 @@ def coach_inputs(conn, user) -> dict:
         (user["id"], dates[0], dates[-1]),
     ).fetchall()
     by_date = {r["entry_date"]: r for r in rows}
+    goals = db.goals_by_date(conn, user["id"], dates)
 
     def day_entry(iso: str) -> dict:
         row = by_date.get(iso)
+        kcal_goal, protein_goal = goals[iso]
+        target = {
+            "ziel_kcal": round(kcal_goal) if kcal_goal else None,
+            "ziel_eiweiss_g": round(protein_goal) if protein_goal else None,
+        }
         if not row:
-            return {"datum": iso, "kcal": 0, "eiweiss_g": None, "eintraege": 0}
+            return {"datum": iso, "kcal": 0, "eiweiss_g": None, "eintraege": 0, **target}
         return {
+            **target,
             "datum": iso,
             "kcal": round(row["total"]),
             # Ohne Eiweißangabe null statt 0 – sonst behauptet die

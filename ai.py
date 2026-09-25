@@ -500,7 +500,10 @@ COACH_RULES = (
     "zum Vortag, behandle es also nicht als verspätet oder als eigenen Tag. "
     "Steht bei eiweiss_g "
     "null, wurde für diesen Tag kein Eiweiß erfasst – behandle das als "
-    "unbekannt und nicht als null Gramm. Gib keine medizinischen "
+    "unbekannt und nicht als null Gramm. Jeder Tag trägt in ziel_kcal und "
+    "ziel_eiweiss_g das Ziel, das an diesem Tag galt; ziel_kcal_pro_tag ist "
+    "das aktuelle Ziel. Bewerte jeden Tag an seinem eigenen Ziel – wurde das "
+    "Ziel geändert, sind ältere Tage nicht am neuen Ziel zu messen. Gib keine medizinischen "
     "Empfehlungen und keine Diagnosen."
 )
 

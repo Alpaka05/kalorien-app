@@ -618,9 +618,12 @@ function renderSummary() {
     : `Letzte ${state.range} Tage`;
   $('chart-next').disabled = !state.end;
 
-  const goal = data.kcal_goal || 0;
+  // Jeder Tag bringt das Ziel mit, das an ihm galt. Eine Zieländerung wirkt
+  // so erst ab dem Tag, an dem sie gemacht wurde, und färbt ältere Balken
+  // nicht nachträglich um.
+  const dayGoal = (day) => day.kcal_goal || 0;
   const losing = data.goal_direction === 'lose';
-  const maxValue = Math.max(...data.series.map((d) => d.total), goal, 1);
+  const maxValue = Math.max(...data.series.map((d) => Math.max(d.total, dayGoal(d))), 1);
   // Muss zur CSS-Geometrie passen: .week-chart ist 140px hoch, davon gehen
   // .week-total (12) + 2x gap (10) + .week-label (15) ab. Ist der Wert größer,
   // staucht Flexbox die hohen Balken auf dieselbe Höhe.
@@ -639,17 +642,38 @@ function renderSummary() {
   // Kleinster Abstand, bei dem die Datumsangaben nicht zusammenlaufen.
   const labelEvery = [1, 2, 5].find((n) => n * perColumn >= 20) || 5;
 
-  if (goal) {
+  // Aufeinanderfolgende Tage mit demselben Ziel teilen sich ein Stück der
+  // Ziellinie. Ohne Zieländerung im Zeitraum ist das eine durchgehende Linie.
+  const gap = dense ? 2 : 6;
+  const segments = [];
+  data.series.forEach((day, index) => {
+    const last = segments[segments.length - 1];
+    if (last && last.goal === dayGoal(day)) last.to = index;
+    else segments.push({ goal: dayGoal(day), from: index, to: index });
+  });
+  segments.forEach((segment, index) => {
+    if (!segment.goal) return;
     const line = document.createElement('div');
     line.className = 'goal-line';
     // Gleiche Grundlinie und gleicher Maßstab wie die Balken, sonst markiert
     // die Linie einen anderen Wert als den, der daneben steht.
-    line.style.bottom = barBaseline + (goal / maxValue) * chartHeight + 'px';
-    const tag = document.createElement('span');
-    tag.textContent = (losing ? 'Grenze ' : 'Ziel ') + fmtNum(goal);
-    line.appendChild(tag);
+    line.style.bottom = barBaseline + (segment.goal / maxValue) * chartHeight + 'px';
+    if (segments.length > 1) {
+      const span = segment.to - segment.from + 1;
+      line.style.left = segment.from * (perColumn + gap) + 'px';
+      line.style.right = 'auto';
+      line.style.width = span * perColumn + (span - 1) * gap + 'px';
+    }
+    // Beschriftung nur am letzten Stück (dem aktuellsten Ziel im Zeitraum)
+    // und an Stücken, die breit genug für die Zahl sind.
+    const width = (segment.to - segment.from + 1) * (perColumn + gap);
+    if (index === segments.length - 1 || width >= 70) {
+      const tag = document.createElement('span');
+      tag.textContent = (losing ? 'Grenze ' : 'Ziel ') + fmtNum(segment.goal);
+      line.appendChild(tag);
+    }
     chart.appendChild(line);
-  }
+  });
 
   data.series.forEach((day, index) => {
     const isToday = day.date === data.today;
@@ -667,6 +691,7 @@ function renderSummary() {
 
     const bar = document.createElement('div');
     bar.className = 'week-bar';
+    const goal = dayGoal(day);
     if (goal && losing) {
       // Ohne Einträge ist ein Tag nicht "unter der Grenze geblieben", sondern
       // unbekannt – der bliebe sonst grün, obwohl nichts erfasst wurde.
