@@ -23,7 +23,7 @@
 <link rel="stylesheet" href="/styles.css?v=__ASSET_V__" />
 </head>
 <body>
-<div class="app">
+<div class="app" id="main-view">
   <div class="topbar">
     <div>
       <h1>Kalorien-Tagebuch</h1>
@@ -31,7 +31,7 @@
     </div>
     <div class="topbar-actions">
       <button class="icon-btn menu-btn" id="settings-btn" title="Einstellungen"
-              aria-label="Einstellungen" aria-haspopup="dialog"><span class="menu-lines" aria-hidden="true"></span></button>
+              aria-label="Einstellungen"><span class="menu-lines" aria-hidden="true"></span></button>
     </div>
   </div>
 
@@ -114,72 +114,72 @@
   <p class="footnote">Kalorienangaben sind Schätzungen auf Basis üblicher Portionsgrößen, keine exakte Nährwertanalyse. Deine Daten liegen auf deinem eigenen Server und sind nur mit deinem Konto sichtbar.</p>
 </div>
 
-<div class="modal-backdrop" id="settings-modal" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-    <div class="modal-head">
-      <p class="modal-title" id="settings-title">Einstellungen</p>
-      <button class="icon-btn" id="settings-close" title="Schließen" aria-label="Schließen"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-    </div>
-    <div class="modal-field">
-      <label class="field-label" for="goal-direction-input">Was willst du erreichen?</label>
-      <select id="goal-direction-input">
-        <option value="gain">Zunehmen</option>
-        <option value="lose">Abnehmen</option>
-      </select>
-      <p class="modal-hint">Entscheidet, wie dein Tagesziel gelesen wird: beim Zunehmen als Untergrenze, die du erreichen willst, beim Abnehmen als Obergrenze, unter der du bleiben willst. Danach richten sich die Einschätzung und die Farben im Diagramm.</p>
-    </div>
-    <div class="modal-field">
-      <label class="field-label" for="goal-input">Tagesziel in kcal</label>
-      <input type="number" id="goal-input" step="any" min="500" max="12000" inputmode="numeric" />
-      <p class="modal-hint" id="goal-hint"></p>
-    </div>
-    <div class="modal-field">
-      <label class="field-label" for="protein-goal-input">Eiweißziel in Gramm (optional)</label>
-      <input type="number" id="protein-goal-input" step="any" min="10" max="500" inputmode="numeric" />
-    </div>
-    <div class="modal-field">
-      <label class="field-label" for="day-start-input">Ein neuer Tag beginnt um</label>
-      <select id="day-start-input"></select>
-      <p class="modal-hint">Wenn du nach Mitternacht noch isst und es zum selben Tag zählen soll, stell hier z. B. 04:00 ein. Die Uhrzeit der Einträge bleibt die echte, nur die Tageszuordnung verschiebt sich – auch rückwirkend.</p>
-    </div>
-    <div class="modal-field">
-      <label class="field-label" for="presets-input">Schnellwahl unter dem Eingabefeld</label>
-      <select id="presets-input">
-        <option value="on">Anzeigen</option>
-        <option value="off">Ausblenden</option>
-      </select>
-      <p class="modal-hint">Zeigt deine häufigsten Einträge der letzten 60 Tage als Knöpfe, die ohne neue Schätzung eintragen.</p>
-    </div>
-    <div class="modal-field">
-      <label class="field-label" for="name-input">Anzeigename (optional)</label>
-      <input type="text" id="name-input" maxlength="60" autocomplete="off" />
-    </div>
-    <div class="modal-field" id="ai-model-field" hidden>
-      <label class="field-label" for="ai-model-input">KI-Modell</label>
-      <select id="ai-model-input"></select>
-      <p class="modal-hint" id="ai-model-hint">Nur für Admin-Konten sichtbar. Gilt für deine Schätzungen und die Einschätzung; alle anderen Konten nutzen weiter Gemini. Claude wird über deinen Anthropic-Key abgerechnet. Antwortet Claude nicht, springt automatisch Gemini ein.</p>
-    </div>
-    <div class="modal-field">
-      <label class="field-label" for="theme-input">Farbschema</label>
-      <select id="theme-input">
-        <option value="system">Automatisch (Systemeinstellung)</option>
-        <option value="light">Hell</option>
-        <option value="dark">Dunkel</option>
-        <option value="oled">OLED</option>
-      </select>
-      <p class="modal-hint">Wirkt sofort und gilt nur auf diesem Gerät – „Speichern" braucht es dafür nicht.</p>
-    </div>
-    <p class="message" id="settings-msg"></p>
-    <div class="modal-actions">
-      <button id="settings-save">Speichern</button>
-      <button class="ghost" id="settings-cancel">Abbrechen</button>
-    </div>
-    <hr class="modal-divider" />
-    <div class="modal-links">
-      <span class="modal-hint" id="settings-account"></span>
-      <a class="link" href="/api/export.csv">Alle Einträge als CSV herunterladen</a>
-      <button class="link" id="logout-btn">Abmelden</button>
-    </div>
+<!-- Die Einstellungen ersetzen die Hauptansicht, statt als Dialog darüber zu
+     liegen: eine eigene Seite in derselben Spalte, mit Zurück-Pfeil. -->
+<div class="app" id="settings-view" hidden>
+  <div class="page-head">
+    <button class="icon-btn" id="settings-back" title="Zurück" aria-label="Zurück"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg></button>
+    <h1 id="settings-title">Einstellungen</h1>
+  </div>
+  <div class="settings-field">
+    <label class="field-label" for="goal-direction-input">Was willst du erreichen?</label>
+    <select id="goal-direction-input">
+      <option value="gain">Zunehmen</option>
+      <option value="lose">Abnehmen</option>
+    </select>
+    <p class="settings-hint">Entscheidet, wie dein Tagesziel gelesen wird: beim Zunehmen als Untergrenze, die du erreichen willst, beim Abnehmen als Obergrenze, unter der du bleiben willst. Danach richten sich die Einschätzung und die Farben im Diagramm.</p>
+  </div>
+  <div class="settings-field">
+    <label class="field-label" for="goal-input">Tagesziel in kcal</label>
+    <input type="number" id="goal-input" step="any" min="500" max="12000" inputmode="numeric" />
+    <p class="settings-hint" id="goal-hint"></p>
+  </div>
+  <div class="settings-field">
+    <label class="field-label" for="protein-goal-input">Eiweißziel in Gramm (optional)</label>
+    <input type="number" id="protein-goal-input" step="any" min="10" max="500" inputmode="numeric" />
+  </div>
+  <div class="settings-field">
+    <label class="field-label" for="day-start-input">Ein neuer Tag beginnt um</label>
+    <select id="day-start-input"></select>
+    <p class="settings-hint">Wenn du nach Mitternacht noch isst und es zum selben Tag zählen soll, stell hier z. B. 04:00 ein. Die Uhrzeit der Einträge bleibt die echte, nur die Tageszuordnung verschiebt sich – auch rückwirkend.</p>
+  </div>
+  <div class="settings-field">
+    <label class="field-label" for="presets-input">Schnellwahl unter dem Eingabefeld</label>
+    <select id="presets-input">
+      <option value="on">Anzeigen</option>
+      <option value="off">Ausblenden</option>
+    </select>
+    <p class="settings-hint">Zeigt deine häufigsten Einträge der letzten 60 Tage als Knöpfe, die ohne neue Schätzung eintragen.</p>
+  </div>
+  <div class="settings-field">
+    <label class="field-label" for="name-input">Anzeigename (optional)</label>
+    <input type="text" id="name-input" maxlength="60" autocomplete="off" />
+  </div>
+  <div class="settings-field" id="ai-model-field" hidden>
+    <label class="field-label" for="ai-model-input">KI-Modell</label>
+    <select id="ai-model-input"></select>
+    <p class="settings-hint" id="ai-model-hint">Nur für Admin-Konten sichtbar. Gilt für deine Schätzungen und die Einschätzung; alle anderen Konten nutzen weiter Gemini. Claude wird über deinen Anthropic-Key abgerechnet. Antwortet Claude nicht, springt automatisch Gemini ein.</p>
+  </div>
+  <div class="settings-field">
+    <label class="field-label" for="theme-input">Farbschema</label>
+    <select id="theme-input">
+      <option value="system">Automatisch (Systemeinstellung)</option>
+      <option value="light">Hell</option>
+      <option value="dark">Dunkel</option>
+      <option value="oled">OLED</option>
+    </select>
+    <p class="settings-hint">Wirkt sofort und gilt nur auf diesem Gerät – „Speichern" braucht es dafür nicht.</p>
+  </div>
+  <p class="message" id="settings-msg"></p>
+  <div class="settings-actions">
+    <button id="settings-save">Speichern</button>
+    <button class="ghost" id="settings-cancel">Abbrechen</button>
+  </div>
+  <hr class="settings-divider" />
+  <div class="settings-links">
+    <span class="settings-hint" id="settings-account"></span>
+    <a class="link" href="/api/export.csv">Alle Einträge als CSV herunterladen</a>
+    <button class="link" id="logout-btn">Abmelden</button>
   </div>
 </div>
 

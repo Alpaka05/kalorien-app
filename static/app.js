@@ -886,7 +886,7 @@ function renderGoalHint() {
       : 'Zum Zunehmen liegt das Ziel über deinem Verbrauch – typisch sind 300–500 kcal Überschuss pro Tag.';
 }
 
-function openSettings() {
+function fillSettings() {
   fillDayStartOptions();
   $('goal-direction-input').value = state.me.goal_direction || 'gain';
   renderGoalHint();
@@ -898,7 +898,47 @@ function openSettings() {
   $('theme-input').value = Theme.get();
   fillAiModelOptions();
   setMessage($('settings-msg'), '');
-  $('settings-modal').hidden = false;
+}
+
+// Die Einstellungen sind eine eigene Ansicht, die die Hauptansicht ersetzt,
+// kein Dialog darüber. Das Öffnen legt einen Verlaufseintrag an: so führen die
+// Zurück-Geste des Handys und die Zurück-Taste des Browsers zur Hauptansicht
+// zurück, statt die App zu verlassen.
+const SETTINGS_STATE = 'settings';
+const inSettingsHistory = () => (history.state && history.state.view) === SETTINGS_STATE;
+let mainScrollY = 0;
+
+function showSettingsView(show) {
+  if (show === !$('settings-view').hidden) return;
+  // Den Fokus nur mitnehmen, wenn er in der Ansicht lag, die gleich verschwindet –
+  // sonst landet er nach Tastaturbedienung im Nichts. Nach einem Tippen oder
+  // Klick bleibt er, wo er ist.
+  const leaving = show ? $('main-view') : $('settings-view');
+  const hadFocus = leaving.contains(document.activeElement);
+  // Die Hauptansicht soll dort weitergehen, wo sie verlassen wurde, die
+  // Einstellungen beginnen immer oben.
+  if (show) mainScrollY = window.scrollY;
+  $('main-view').hidden = show;
+  $('settings-view').hidden = !show;
+  window.scrollTo(0, show ? 0 : mainScrollY);
+  if (hadFocus) (show ? $('settings-back') : $('settings-btn')).focus({ preventScroll: true });
+}
+
+function openSettings() {
+  fillSettings();
+  history.pushState({ view: SETTINGS_STATE }, '');
+  showSettingsView(true);
+}
+
+// Erst umschalten, dann den eigenen Verlaufseintrag zurücknehmen. history.back()
+// wirkt erst mit dem popstate, bis dahin meldet history.state noch die
+// Einstellungen. Ein zweiter Aufruf in dieser Lücke – etwa Zurück-Pfeil während
+// des Speicherns, danach schließt das Speichern selbst – ginge sonst einen
+// Schritt weiter zurück, aus der App heraus. Deshalb zählt die sichtbare Ansicht.
+function closeSettings() {
+  if ($('settings-view').hidden) return;
+  showSettingsView(false);
+  if (inSettingsHistory()) history.back();
 }
 
 // Nur Admin-Konten bekommen die Modellliste von /api/me. Für alle anderen
@@ -943,10 +983,10 @@ async function saveSettings() {
     btn.disabled = false;
     return;
   }
-  // Erst schließen, wenn das Speichern geklappt hat – eine Fehlermeldung im
-  // zugeklappten Fenster würde niemand sehen. Fehler beim Neuladen danach
-  // gehören in die Hauptanzeige.
-  $('settings-modal').hidden = true;
+  // Erst zur Hauptansicht zurück, wenn das Speichern geklappt hat – eine
+  // Fehlermeldung in der verlassenen Ansicht würde niemand sehen. Fehler beim
+  // Neuladen danach gehören in die Hauptanzeige.
+  closeSettings();
   const moved = state.me.moved_entries || 0;
   try {
     await refreshAll();
@@ -1002,18 +1042,23 @@ document.querySelectorAll('[data-range]').forEach((btn) => {
   btn.addEventListener('click', () => setRange(Number(btn.dataset.range)));
 });
 $('settings-btn').addEventListener('click', openSettings);
-$('settings-close').addEventListener('click', () => ($('settings-modal').hidden = true));
-$('settings-cancel').addEventListener('click', () => ($('settings-modal').hidden = true));
+$('settings-back').addEventListener('click', closeSettings);
+$('settings-cancel').addEventListener('click', closeSettings);
 $('settings-save').addEventListener('click', saveSettings);
 $('goal-direction-input').addEventListener('change', renderGoalHint);
 // Das Farbschema liegt im localStorage, nicht im Konto: es wirkt sofort und
 // gehoert deshalb nicht in die PATCH-Nutzlast von "Speichern".
 $('theme-input').addEventListener('change', (e) => Theme.set(e.target.value));
-$('settings-modal').addEventListener('click', (e) => {
-  if (e.target === $('settings-modal')) $('settings-modal').hidden = true;
+// Zurück-Geste, Zurück- und Vorwärts-Taste des Browsers. Die Felder werden nur
+// beim Wechsel in die Einstellungen neu befüllt, damit ungespeicherte Eingaben
+// nicht überschrieben werden.
+window.addEventListener('popstate', () => {
+  const show = inSettingsHistory();
+  if (show && $('settings-view').hidden) fillSettings();
+  showSettingsView(show);
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') $('settings-modal').hidden = true;
+  if (e.key === 'Escape' && !$('settings-view').hidden) closeSettings();
 });
 $('logout-btn').addEventListener('click', async () => {
   await fetch('/api/auth/logout', { method: 'POST' });
@@ -1023,6 +1068,12 @@ $('logout-btn').addEventListener('click', async () => {
 (async function start() {
   try {
     await loadMe();
+    // Neu geladen, während die Einstellungen offen waren: der Verlaufseintrag
+    // überlebt das Neuladen, also auch die Ansicht.
+    if (inSettingsHistory()) {
+      fillSettings();
+      showSettingsView(true);
+    }
     document.querySelector('[data-range="7"]').classList.add('active');
     await refreshAll();
   } catch (err) {
