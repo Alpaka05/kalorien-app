@@ -1,11 +1,15 @@
-"""Gemini-API-Aufrufe: Kalorienschätzung und Ziel-Einschätzung.
+"""KI-Aufrufe: Kalorienschätzung und Ziel-Einschätzung.
 
-Beide Aufrufe nutzen Structured Output (`responseJsonSchema`), damit die
-Antwort garantiert gültiges JSON nach unserem Schema ist – kein Parsen von
-Freitext, kein Aufräumen von Markdown-Codeblöcken.
+Standard ist Gemini (kostenlos im Free Tier). Admin-Konten können in den
+Einstellungen Claude wählen (siehe AI_MODELS); der Server lässt das nur für
+Adressen aus ADMIN_EMAILS zu, alle anderen laufen immer über Gemini.
 
-Die Gemini-API wird direkt über REST angesprochen (nur Standardbibliothek).
-Das spart eine Abhängigkeit und reicht für zwei Aufrufe völlig aus.
+Beide Anbieter nutzen Structured Output, damit die Antwort garantiert
+gültiges JSON nach unserem Schema ist – kein Parsen von Freitext, kein
+Aufräumen von Markdown-Codeblöcken.
+
+Die Gemini-API wird direkt über REST angesprochen (nur Standardbibliothek),
+Claude über das offizielle anthropic-SDK.
 """
 
 import json
@@ -18,6 +22,26 @@ import urllib.error
 import urllib.request
 
 log = logging.getLogger("kalorien.ai")
+
+# Auswählbare Modelle in den Einstellungen. "gemini" steht für die
+# Gemini-Kette unten (Hauptmodell plus Ausweichmodelle); alles andere ist eine
+# Claude-Modell-ID. Nur Admins dürfen etwas anderes als "gemini" wählen.
+DEFAULT_MODEL = "gemini"
+AI_MODELS = {
+    "gemini": "Gemini (kostenlos)",
+    "claude-opus-5-5": "Claude Opus 5.5",
+}
+
+# Denktiefe für Claude. Opus 5.5 denkt immer mit (abschalten lässt es sich
+# nicht); "medium" ist sein Standard und für eine Schätzung ein guter
+# Mittelweg aus Genauigkeit, Dauer und Kosten. "low" ist schneller/günstiger.
+# Bewusst nicht CLAUDE_EFFORT: den Namen setzen auch andere Werkzeuge.
+CLAUDE_EFFORT = os.environ.get("AI_CLAUDE_EFFORT", "").strip().lower()
+if CLAUDE_EFFORT not in ("low", "medium", "high", "xhigh", "max"):
+    CLAUDE_EFFORT = "medium"
+# Muss vor dem Proxy-Timeout fertig sein, und danach bleibt noch Zeit für den
+# Rückfall auf Gemini (TOTAL_DEADLINE gilt für beides zusammen).
+CLAUDE_TIMEOUT = 30.0
 
 # Gemini Flash als Standard: im Free Tier von Google AI Studio kostenlos und
 # für Kalorienschätzungen mehr als ausreichend. Über GEMINI_MODEL umstellbar,
@@ -227,10 +251,93 @@ def _build_body(prompt: str, schema: dict, max_tokens: int, thinking: str | None
     }
 
 
-def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str) -> dict:
+def claude_available() -> bool:
+    return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+
+def model_available(model: str) -> bool:
+    if model == DEFAULT_MODEL:
+        return True
+    return model in AI_MODELS and claude_available()
+
+
+_claude_client = None
+
+
+def _claude():
+    global _claude_client
+    if _claude_client is None:
+        import anthropic  # erst hier: ohne Claude-Nutzung wird es nie gebraucht
+
+        # Keine SDK-Wiederholungen: jeder Versuch kostet Zeit, und nach einem
+        # Fehlschlag übernimmt ohnehin Gemini.
+        _claude_client = anthropic.Anthropic(timeout=CLAUDE_TIMEOUT, max_retries=0)
+    return _claude_client
+
+
+def _claude_json(model: str, prompt: str, schema: dict) -> dict:
+    import anthropic
+
+    try:
+        response = _claude().messages.create(
+            model=model,
+            # Denken und Antwort teilen sich das Budget.
+            max_tokens=16000,
+            output_config={
+                "effort": CLAUDE_EFFORT,
+                "format": {"type": "json_schema", "schema": schema},
+            },
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.AuthenticationError as exc:
+        raise AIError("Der Anthropic-API-Key wird nicht akzeptiert.") from exc
+    except anthropic.PermissionDeniedError as exc:
+        raise AIError("Der Anthropic-API-Key darf dieses Modell nicht nutzen.") from exc
+    except anthropic.RateLimitError as exc:
+        raise AIError("Claude-Limit erreicht.") from exc
+    except anthropic.BadRequestError as exc:
+        # Darunter fällt auch ein leeres Guthaben ("credit balance is too low").
+        raise AIError(f"Claude lehnt die Anfrage ab: {exc.message}") from exc
+    except anthropic.APITimeoutError as exc:
+        raise AIError("Claude hat nicht rechtzeitig geantwortet.") from exc
+    except anthropic.APIConnectionError as exc:
+        raise AIError("Keine Verbindung zur Anthropic-API.") from exc
+    except anthropic.APIStatusError as exc:
+        raise AIError(f"Claude-Fehler {exc.status_code}.") from exc
+
+    if response.stop_reason == "refusal":
+        raise AIError("Claude hat diese Anfrage abgelehnt.")
+    if response.stop_reason == "max_tokens":
+        raise AIError("Die Antwort von Claude wurde abgeschnitten.")
+    # Die Antwort kann mit (leeren) Denk-Blöcken beginnen – nach Typ suchen.
+    text = "".join(b.text for b in response.content if b.type == "text")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise AIError("Die Antwort von Claude war nicht lesbar.") from exc
+
+
+def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str,
+               model: str = DEFAULT_MODEL) -> dict:
+    deadline = time.monotonic() + TOTAL_DEADLINE
+    if model != DEFAULT_MODEL and model_available(model):
+        started = time.monotonic()
+        try:
+            result = _claude_json(model, prompt, schema)
+            log.info("Antwort von %s nach %.1f s", model, time.monotonic() - started)
+            return result
+        except AIError as exc:
+            # Lieber eine Gemini-Schätzung als gar keine. Im Log steht, warum.
+            log.warning("%s fehlgeschlagen (%s) – weiche auf Gemini aus", model, exc)
+            if deadline - time.monotonic() < MIN_RETRY_TIME:
+                raise
+    return _gemini_json(prompt, schema, max_tokens, thinking, deadline)
+
+
+def _gemini_json(prompt: str, schema: dict, max_tokens: int, thinking: str,
+                 deadline: float) -> dict:
     global _thinking_enabled
     key = _api_key()
-    deadline = time.monotonic() + TOTAL_DEADLINE
     try:
         try:
             response = _post(
@@ -382,7 +489,8 @@ MEAL_UNCERTAINTY = {
 }
 
 
-def estimate_meal(description: str, direction: str = "gain") -> dict:
+def estimate_meal(description: str, direction: str = "gain",
+                  model: str = DEFAULT_MODEL) -> dict:
     """Schätzt kcal und Eiweiß für eine Freitext-Angabe."""
     uncertainty = MEAL_UNCERTAINTY.get(direction, MEAL_UNCERTAINTY["gain"])
     result = _json_call(
@@ -391,6 +499,7 @@ def estimate_meal(description: str, direction: str = "gain") -> dict:
         # Großzügig, weil Denk- und Antworttokens sich das Budget teilen.
         max_tokens=8192,
         thinking="low",
+        model=model,
     )
 
     # Maßgeblich ist die Summe der Bestandteile, nicht die Zahl, die das Modell
@@ -520,7 +629,8 @@ def coach_system(direction: str) -> str:
     )
 
 
-def coach_analysis(data: dict, direction: str = "gain") -> dict:
+def coach_analysis(data: dict, direction: str = "gain",
+                   model: str = DEFAULT_MODEL) -> dict:
     """Bewertet die letzten Tage gegenüber dem Kalorienziel."""
     prompt = (
         coach_system(direction)
@@ -530,7 +640,7 @@ def coach_analysis(data: dict, direction: str = "gain") -> dict:
     # Niedrige Denkstufe auch hier: Die Einschätzung fasst 14 Tageswerte
     # zusammen, dafür reicht sie, und mit "medium" lief der Aufruf auf dem Free
     # Tier regelmäßig in den Proxy-Timeout.
-    result = _json_call(prompt, COACH_SCHEMA, max_tokens=16000, thinking="low")
+    result = _json_call(prompt, COACH_SCHEMA, max_tokens=16000, thinking="low", model=model)
     tips = [str(t).strip() for t in (result.get("tips") or []) if str(t).strip()]
     return {
         "status": result.get("status") or "no_data",

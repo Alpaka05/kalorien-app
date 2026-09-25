@@ -176,6 +176,30 @@ def require_user(view):
     return wrapper
 
 
+def ai_model(user) -> str:
+    """Das KI-Modell, das für dieses Konto tatsächlich benutzt wird.
+
+    Die gespeicherte Wahl zählt nur für Admins und nur, wenn das Modell
+    gerade nutzbar ist (Claude braucht ANTHROPIC_API_KEY). In jedem anderen
+    Fall Gemini – auch wenn jemand einen Admin von der Liste streicht, fällt
+    sein Konto damit sofort auf Gemini zurück.
+    """
+    try:
+        chosen = user["ai_model"] or ai.DEFAULT_MODEL
+    except (KeyError, IndexError):
+        chosen = ai.DEFAULT_MODEL
+    if chosen != ai.DEFAULT_MODEL and auth.is_admin(user["email"]) and ai.model_available(chosen):
+        return chosen
+    return ai.DEFAULT_MODEL
+
+
+def ai_model_options() -> list[dict]:
+    return [
+        {"id": key, "label": label, "available": ai.model_available(key)}
+        for key, label in ai.AI_MODELS.items()
+    ]
+
+
 def day_start(user) -> int:
     """Persönlicher Tagesbeginn in Stunden (0 = Mitternacht)."""
     try:
@@ -418,8 +442,21 @@ def me():
             "goal_direction": goal_direction(user),
             "show_presets": show_presets(user),
             "mail_configured": mailer.is_configured(),
+            **ai_settings(user),
         }
     )
+
+
+def ai_settings(user) -> dict:
+    """Modellwahl nur für Admins – alle anderen bekommen die Felder gar nicht."""
+    if not auth.is_admin(user["email"]):
+        return {"is_admin": False}
+    return {
+        "is_admin": True,
+        "ai_model": user["ai_model"] or ai.DEFAULT_MODEL,
+        "ai_model_active": ai_model(user),
+        "ai_models": ai_model_options(),
+    }
 
 
 @app.route("/api/me", methods=["PATCH"])
@@ -455,6 +492,18 @@ def update_me():
                 return bad("show_presets muss true oder false sein.")
             fields.append("show_presets = ?")
             values.append(1 if payload["show_presets"] else 0)
+        if "ai_model" in payload:
+            # Die Prüfung liegt hier auf dem Server, nicht nur im ausgeblendeten
+            # Feld: ein nachgebauter Request eines Nicht-Admins scheitert.
+            if not auth.is_admin(g.user["email"]):
+                return bad("Nur Admin-Konten können das KI-Modell wählen.", 403)
+            model = str(payload["ai_model"] or "").strip()
+            if model not in ai.AI_MODELS:
+                return bad("Unbekanntes KI-Modell.")
+            if not ai.model_available(model):
+                return bad("Für Claude fehlt ANTHROPIC_API_KEY in der .env.")
+            fields.append("ai_model = ?")
+            values.append(model)
         new_start = None
         if "day_start_hour" in payload:
             new_start = int(parse_number(payload["day_start_hour"], "Tagesbeginn", 0, 11))
@@ -476,11 +525,13 @@ def update_me():
 
     row = g.conn.execute(
         "SELECT email, display_name, kcal_goal, protein_goal, day_start_hour, "
-        "       goal_direction, show_presets "
+        "       goal_direction, show_presets, ai_model "
         "FROM users WHERE id = ?",
         (g.user["id"],),
     ).fetchone()
     result = dict(row)
+    del result["ai_model"]
+    result.update(ai_settings(row))
     result["day_start_hour"] = int(result["day_start_hour"] or 0)
     result["goal_direction"] = goal_direction(row)
     result["show_presets"] = show_presets(row)
@@ -607,7 +658,7 @@ def add_entry():
             )
             normalized = description
         else:
-            estimate = ai.estimate_meal(description, goal_direction(g.user))
+            estimate = ai.estimate_meal(description, goal_direction(g.user), ai_model(g.user))
             kcal, protein, normalized = (
                 estimate["kcal"],
                 estimate["protein"],
@@ -970,8 +1021,11 @@ def coach():
             }
         )
 
+    # Das Modell gehört mit in den Hash: nach einem Wechsel soll die nächste
+    # Einschätzung vom neuen Modell kommen, nicht aus dem Zwischenspeicher.
     inputs_hash = sha256(
-        json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        json.dumps({"daten": data, "modell": ai_model(user)}, sort_keys=True,
+                   ensure_ascii=False).encode("utf-8")
     ).hexdigest()
     day = user_today(user)
     if not force:
@@ -986,7 +1040,7 @@ def coach():
             return jsonify(payload)
 
     try:
-        result = ai.coach_analysis(data, goal_direction(user))
+        result = ai.coach_analysis(data, goal_direction(user), ai_model(user))
     except ai.AIError as exc:
         # Lieber die letzte Einschätzung zeigen als eine Fehlermeldung: im Free
         # Tier ist Gemini oft minutenlang überlastet, und eine Einschätzung von
