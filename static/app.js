@@ -602,6 +602,13 @@ function renderSummary() {
     if (last && last.goal === dayGoal(day) && last.losing === dayLosing(day)) last.to = index;
     else segments.push({ goal: dayGoal(day), losing: dayLosing(day), from: index, to: index });
   });
+  const current = segments[segments.length - 1];
+  const legend = $('chart-goal');
+  legend.hidden = !(current && current.goal);
+  legend.textContent = legend.hidden
+    ? ''
+    : (current.losing ? 'Grenze ' : 'Ziel ') + fmtNum(current.goal);
+
   segments.forEach((segment, index) => {
     if (!segment.goal) return;
     const line = document.createElement('div');
@@ -615,10 +622,11 @@ function renderSummary() {
       line.style.right = 'auto';
       line.style.width = span * perColumn + (span - 1) * gap + 'px';
     }
-    // Beschriftung nur am letzten Stück (dem aktuellsten Ziel im Zeitraum)
-    // und an Stücken, die breit genug für die Zahl sind.
+    // Das letzte Stück (das aktuellste Ziel im Zeitraum) steht als Legende
+    // unter dem Diagramm, wo es keine Tageszahl verdecken kann. Ältere Stücke
+    // nur auf der Linie und nur, wenn sie breit genug sind.
     const width = (segment.to - segment.from + 1) * (perColumn + gap);
-    if (index === segments.length - 1 || width >= 70) {
+    if (index < segments.length - 1 && width >= 70) {
       const tag = document.createElement('span');
       tag.textContent = (segment.losing ? 'Grenze ' : 'Ziel ') + fmtNum(segment.goal);
       line.appendChild(tag);
@@ -650,7 +658,6 @@ function renderSummary() {
     } else if (goal && day.total >= goal) {
       bar.classList.add('reached');
     }
-    if (isToday) bar.classList.add('today');
     bar.style.height = Math.max(4, Math.round((day.total / maxValue) * chartHeight)) + 'px';
 
     const label = document.createElement('span');
