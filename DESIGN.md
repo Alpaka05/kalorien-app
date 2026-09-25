@@ -167,20 +167,18 @@ and an amber for caution.
 - **Quiet Garden Green** (`#4A7A64` light, `#66A385` dark): Desaturated and domestic,
   a grown thing rather than a brand color — deliberately not a vivid app-accent green.
   It fills primary buttons, fills history bars for days that met the goal, draws the
-  goal-progress fill, and draws focus rings. It is the system's only affirmative
+  goal-progress fill, and draws focus rings and the selected chart bar's ring. It is the system's only affirmative
   voice.
 - **Deep Garden Green** (`#2E5643` light, `#8AC2A4` dark): The stronger sibling. Used
-  for primary-button hover, selected chart bars, link text, and "good" notes.
+  for primary-button hover, link text, and "good" notes.
 - **Garden Wash** (`#E7F0EA` light, `#23332B` dark): The faint accent field behind
-  hovered chips and icon buttons, active range toggles, and the 3px focus glow.
+  hovered chips and icon buttons, and active range toggles.
 
 ### Secondary
 
 - **Muted Amber** (`#976927` light, `#D2A25C` dark): Caution, not alarm. Marks a goal
   bar pushed past target, history bars over the ceiling in losing mode, and "warn"
-  notes. Paired with **Amber Wash** (`#F7EFE0` / `#332A1B`) and, for the hover and
-  selected states of an amber chart bar, **Strong Amber** (`#6F4C1B` / `#E8C089`) —
-  the same role `accent-dark` plays for green.
+  notes. Paired with **Amber Wash** (`#F7EFE0` / `#332A1B`).
 
 ### Tertiary
 
@@ -328,9 +326,6 @@ else. Cards, panels, chips, and buttons stay flat at rest and always will.
 - **Focus ring** (`box-shadow: 0 0 0 1px var(--accent)`): Paired with a border shift
   to `--accent` on focused inputs and selects, so border and ring read as one solid
   2px line — the same weight as the `:focus-visible` outline everywhere else.
-- **Today marker** (`box-shadow: inset 0 0 0 1px var(--accent-dark)`): An inset
-  hairline on today's chart bar — deliberately quiet so it doesn't outshout the
-  selected bar.
 
 ### Named Rules
 
@@ -456,13 +451,22 @@ Three details carry the craft:
 
 - Focus is moved off the column and onto the bar (`:focus-visible .week-bar`), because
   a ring around a full-height column highlights empty space.
+- Hover and selection never recolor a bar, so its own color — the answer to "did I make
+  it" — stays readable. Both draw a 2px outline 2px off the bar: Ink Secondary on hover
+  (mouse only, `hover: hover`), Quiet Garden Green when selected. The gap is what keeps
+  a green ring visible around a met (green) bar; flush, it merged into it. Today gets
+  no bar marker at all, only the bold day label. The column must also cancel the
+  generic `button:hover` fill, which otherwise paints the whole column.
 - Bars carry `flex-shrink: 0`, without which tall days compress to equal heights.
 - The total and label slots hold a fixed minimum height even when empty, so the
   30-day view — which labels only every fifth day — keeps a common baseline.
 
-A dashed Hairline Strong goal line crosses the chart with its value in 10px mono,
-backed by the page color so the line doesn't run through the digits. Its label names
-what the line is in that mode — "Ziel" when gaining, "Grenze" when losing.
+A dashed Hairline Strong goal line crosses the chart. The current goal is not labeled
+on the line — there it always covered the total of a day close to the goal — but in a
+small legend (the value in 10.5px mono) at the right end of the note
+row under the chart, so the bars keep their full width. Older goals within the range
+keep an inline label on their own stretch of line, backed by the page color. The label
+names what the line is in that mode — "Ziel" when gaining, "Grenze" when losing.
 
 ### Icons
 
