@@ -401,19 +401,20 @@ a:hover { color: var(--accent); }
    vom Balken war nichts mehr zu sehen. */
 .week-col:hover:not(:disabled) { background: none; }
 .week-col:active:not(:disabled) { transform: none; }
-/* Hover und Auswahl zeichnen nur einen 2px-Rahmen direkt am Balken und
-   lassen seine Farbe in Ruhe: die Farbe sagt, ob das Ziel erreicht wurde, und
-   das soll lesbar bleiben. Vorher füllte die Auswahl den Balken grün – auch
-   an Tagen, die das Ziel verfehlt hatten.
+/* Hover und Auswahl zeichnen nur einen 2px-Rahmen mit 2px Abstand um den
+   Balken und lassen seine Farbe in Ruhe: die Farbe sagt, ob das Ziel
+   erreicht wurde, und das soll lesbar bleiben. Vorher füllte die Auswahl den
+   Balken grün – auch an Tagen, die das Ziel verfehlt hatten. Der Abstand
+   trennt den Rahmen vom Balken; direkt anliegend war ein grüner Rahmen um
+   einen erreichten (grünen) Balken kaum zu sehen.
    Hover hellgrau und nur mit echter Maus: auf dem Handy bliebe der Rahmen
    nach dem Antippen am Balken hängen. */
 @media (hover: hover) {
   .week-col:hover .week-bar { outline-color: var(--text-secondary); }
 }
-/* Auswahl grün wie ein aktiver Button. --accent-dark statt --accent, weil
-   ein Rahmen in --accent um einen erreichten (grünen) Balken unsichtbar
-   wäre. Steht nach dem Hover-Block, damit sie beim Überfahren bleibt. */
-.week-col.selected .week-bar { outline-color: var(--accent-dark); }
+/* Auswahl grün wie ein aktiver Button. Steht nach dem Hover-Block, damit sie
+   beim Überfahren bleibt. */
+.week-col.selected .week-bar { outline-color: var(--accent); }
 /* Die Spalte ist ein Button über die volle Diagrammhöhe. Ohne diese Regel
    zeichnet der Browser seinen Fokusring um die ganze Spalte – hervorgehoben
    werden soll aber nur die Säule selbst. */
@@ -425,7 +426,7 @@ a:hover { color: var(--accent); }
   background: var(--border-strong);
   transition: background var(--dur-fast) var(--ease),
               outline-color var(--dur-fast) var(--ease);
-  outline: 2px solid transparent; outline-offset: 0;
+  outline: 2px solid transparent; outline-offset: 2px;
   /* Nicht stauchen lassen: sonst werden alle hohen Tage auf dieselbe Höhe
      gequetscht und der höchste Balken ist immer zu kurz. */
   flex-shrink: 0;

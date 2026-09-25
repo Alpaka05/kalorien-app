@@ -167,11 +167,10 @@ and an amber for caution.
 - **Quiet Garden Green** (`#4A7A64` light, `#66A385` dark): Desaturated and domestic,
   a grown thing rather than a brand color — deliberately not a vivid app-accent green.
   It fills primary buttons, fills history bars for days that met the goal, draws the
-  goal-progress fill, and draws focus rings. It is the system's only affirmative
+  goal-progress fill, and draws focus rings and the selected chart bar's ring. It is the system's only affirmative
   voice.
 - **Deep Garden Green** (`#2E5643` light, `#8AC2A4` dark): The stronger sibling. Used
-  for primary-button hover, the selected chart bar's outline, link text, and "good"
-  notes.
+  for primary-button hover, link text, and "good" notes.
 - **Garden Wash** (`#E7F0EA` light, `#23332B` dark): The faint accent field behind
   hovered chips and icon buttons, and active range toggles.
 
@@ -453,9 +452,9 @@ Three details carry the craft:
 - Focus is moved off the column and onto the bar (`:focus-visible .week-bar`), because
   a ring around a full-height column highlights empty space.
 - Hover and selection never recolor a bar, so its own color — the answer to "did I make
-  it" — stays readable. Both draw a 2px outline flush on the bar: Ink Secondary on hover
-  (mouse only, `hover: hover`), Deep Garden Green when selected — `accent-dark`, not
-  `accent`, because an accent ring around a met (accent) bar would vanish. Today gets
+  it" — stays readable. Both draw a 2px outline 2px off the bar: Ink Secondary on hover
+  (mouse only, `hover: hover`), Quiet Garden Green when selected. The gap is what keeps
+  a green ring visible around a met (green) bar; flush, it merged into it. Today gets
   no bar marker at all, only the bold day label. The column must also cancel the
   generic `button:hover` fill, which otherwise paints the whole column.
 - Bars carry `flex-shrink: 0`, without which tall days compress to equal heights.
