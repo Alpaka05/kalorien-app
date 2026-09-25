@@ -421,7 +421,15 @@ function presetLabel(desc) {
   return (space > 10 ? cut.slice(0, space) : cut).replace(/[\s,;:–-]+$/, '') + '…';
 }
 
+// Ausgeschaltet gibt es keine Anfrage: die Chips würden ohnehin nicht gezeigt.
+const presetsEnabled = () => !state.me || state.me.show_presets !== false;
+
 async function loadPresets() {
+  if (!presetsEnabled()) {
+    state.presets = null;
+    renderPresets();
+    return;
+  }
   const data = await api('/api/presets');
   state.presets = data;
   renderPresets();
@@ -470,7 +478,8 @@ function buildPresetChip(preset) {
 function renderPresets() {
   const container = $('presets');
   container.textContent = '';
-  if (!state.presets) return;
+  container.hidden = !presetsEnabled();
+  if (!state.presets || container.hidden) return;
   const presets = state.presets.presets;
   if (!presets.length) {
     // Ohne Hinweis sähe die leere Stelle wie ein Ladefehler aus.
@@ -837,6 +846,7 @@ function openSettings() {
   $('protein-goal-input').value = state.me.protein_goal ? Math.round(state.me.protein_goal) : '';
   $('day-start-input').value = String(state.me.day_start_hour || 0);
   $('name-input').value = state.me.display_name || '';
+  $('presets-input').value = presetsEnabled() ? 'on' : 'off';
   $('theme-input').value = Theme.get();
   setMessage($('settings-msg'), '');
   $('settings-modal').hidden = false;
@@ -856,6 +866,7 @@ async function saveSettings() {
           protein_goal: $('protein-goal-input').value.trim() || null,
           day_start_hour: $('day-start-input').value,
           display_name: $('name-input').value.trim(),
+          show_presets: $('presets-input').value === 'on',
         }),
       })
     );
