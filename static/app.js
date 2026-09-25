@@ -91,18 +91,42 @@ const state = {
 // API
 // --------------------------------------------------------------------------
 
+// Fehler, bei denen die App selbst gar nicht geantwortet hat: das Netz war
+// weg, oder der Proxy davor (Cloudflare, Nginx) hat die Anfrage mit einer
+// eigenen HTML-Seite beendet – etwa weil der Container gerade neu startet oder
+// die Antwort zu lange gedauert hat. Solche Fehler lohnen einen zweiten
+// Versuch; eine JSON-Fehlermeldung der App dagegen nicht.
+class GatewayError extends Error {}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: options.body ? { 'Content-Type': 'application/json' } : {},
-    ...options,
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      headers: options.body ? { 'Content-Type': 'application/json' } : {},
+      ...options,
+    });
+  } catch (err) {
+    throw new GatewayError('Keine Verbindung zum Server. Bitte nochmal versuchen.');
+  }
   if (response.status === 401) {
     window.location.href = '/login';
     throw new Error('Nicht angemeldet.');
   }
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Da ist etwas schiefgelaufen.');
-  return data;
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    if (data && data.error) throw new Error(data.error);
+    // Keine JSON-Antwort heißt: nicht von der App. Den Statuscode nennen,
+    // damit sich die Ursache im Log des Proxys wiederfinden lässt.
+    const status = response.status;
+    const timeout = status === 504 || status === 524;
+    throw new GatewayError(
+      (timeout
+        ? 'Der Server hat nicht rechtzeitig geantwortet'
+        : 'Der Server war gerade nicht erreichbar') +
+        ` (HTTP ${status}). Bitte nochmal versuchen.`
+    );
+  }
+  return data || {};
 }
 
 function setMessage(el, text, kind = 'error') {
@@ -766,6 +790,20 @@ async function saveWeight() {
 // KI-Einschätzung
 // --------------------------------------------------------------------------
 
+async function fetchCoach(refresh) {
+  const call = () =>
+    refresh ? api('/api/coach/refresh', { method: 'POST' }) : api('/api/coach');
+  try {
+    return await call();
+  } catch (err) {
+    if (!(err instanceof GatewayError)) throw err;
+    // Einmal still wiederholen: meist war nur der Container kurz weg oder die
+    // Verbindung gestört, und die Einschätzung kommt beim zweiten Mal.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return call();
+  }
+}
+
 async function loadCoach(refresh = false) {
   const box = $('coach');
   const refreshBtn = $('coach-refresh');
@@ -773,9 +811,7 @@ async function loadCoach(refresh = false) {
   refreshBtn.disabled = true;
   if (refresh) $('coach-stamp').textContent = 'Wird ausgewertet…';
   try {
-    const data = refresh
-      ? await api('/api/coach/refresh', { method: 'POST' })
-      : await api('/api/coach');
+    const data = await fetchCoach(refresh);
     // Die Statuswerte beschreiben die Lage zum Ziel, nicht deren Bewertung.
     // Welche Lage gut ist, entscheidet die Richtung – deshalb steht sie als
     // eigene Klasse daneben und das CSS dreht die Farben.
@@ -792,7 +828,12 @@ async function loadCoach(refresh = false) {
       li.textContent = tip;
       tips.appendChild(li);
     });
-    $('coach-stamp').textContent = data.cached ? 'Gespeicherte Einschätzung' : 'Frisch ausgewertet';
+    // stale: Gemini war nicht erreichbar, der Server hat stattdessen die
+    // letzte gespeicherte Einschätzung geschickt. Sie kennt die neuesten
+    // Einträge noch nicht – das muss dabeistehen.
+    $('coach-stamp').textContent = data.stale
+      ? 'Ältere Einschätzung – ' + (data.notice || 'Aktualisierung gerade nicht möglich.')
+      : data.cached ? 'Gespeicherte Einschätzung' : 'Frisch ausgewertet';
     refreshBtn.hidden = data.status === 'no_goal' || data.status === 'no_data';
   } catch (err) {
     box.className = 'coach error';
