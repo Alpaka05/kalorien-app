@@ -17,6 +17,9 @@ von Google AI Studio kostenlos.
 - **Konten mit E-Mail-Code** – mehrere Personen parallel, jede sieht nur ihre
   eigenen Daten, kein Passwort nötig
 - **Tagesziel** mit Fortschrittsbalken und „noch X kcal bis …"
+  – eine Zieländerung gilt ab dem Tag, an dem du sie machst; ältere Tage
+  behalten im Verlauf und in der Einschätzung das Ziel, das damals galt.
+  Das gilt auch für den Wechsel zwischen Zunehmen und Abnehmen
 - **Ziel: Zunehmen oder Abnehmen** – dieselbe Zahl, zwei Lesarten. Beim
   Zunehmen willst du sie erreichen, beim Abnehmen darunter bleiben; Einschätzung
   und Diagrammfarben drehen sich mit
