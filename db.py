@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS users (
     -- die erreicht werden soll, oder als Obergrenze, unter der man bleiben
     -- will. 'gain' ist der Standard, weil die App so angefangen hat.
     goal_direction  TEXT NOT NULL DEFAULT 'gain',
+    -- 1 = Schnellwahl-Chips unter dem Eingabefeld zeigen, 0 = ausblenden.
+    show_presets    INTEGER NOT NULL DEFAULT 1,
     created_at      TEXT NOT NULL
 );
 
@@ -200,6 +202,10 @@ def init_db() -> None:
             "WHERE id NOT IN (SELECT user_id FROM goal_history)",
             (GOAL_HISTORY_START,),
         )
+        if "show_presets" not in user_cols:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN show_presets INTEGER NOT NULL DEFAULT 1"
+            )
         conn.commit()
         conn.executescript(INDEXES)
         conn.commit()
