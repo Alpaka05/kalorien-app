@@ -13,7 +13,9 @@ von Google AI Studio kostenlos.
 ## Funktionen
 
 - **Freitext-Eingabe** – „2 Scheiben Toast mit Butter" reicht, kcal und Eiweiß
-  werden geschätzt und lassen sich nachträglich korrigieren
+  werden geschätzt und lassen sich nachträglich korrigieren. Ist Gemini
+  ausgelastet oder braucht länger als 15 Sekunden, wird der Eintrag trotzdem
+  angenommen und im Hintergrund nachgetragen – mit der ursprünglichen Uhrzeit
 - **Konten mit E-Mail-Code** – mehrere Personen parallel, jede sieht nur ihre
   eigenen Daten, kein Passwort nötig
 - **Tagesziel** mit Fortschrittsbalken und „noch X kcal bis …"
@@ -193,6 +195,13 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 
 Der Free Tier erlaubt außerdem nur etwa 20 Anfragen pro Minute. Meldet Gemini
 das Limit, wartet die App die genannte Zeit ab, statt sofort erneut anzufragen.
+
+Klappt eine Schätzung trotzdem nicht, geht der Eintrag nicht verloren: er steht
+als „Wird geschätzt…“ in der Liste und wird nach 1, 2, 4, 8 und danach alle
+15 Minuten erneut versucht, auch über einen Neustart des Containers hinweg.
+Nach 24 Stunden ohne Erfolg gibt die App auf und zeigt den Grund an; der
+Eintrag lässt sich dann erneut anstoßen oder verwerfen. Die Warteschlange liegt
+in der Tabelle `pending_entries`.
 
 Ein Aufruf entsteht pro neuem Freitext-Eintrag und einmal täglich für die
 Einschätzung; Einträge über die Schnellwahl-Chips brauchen keinen Aufruf.

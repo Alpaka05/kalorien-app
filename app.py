@@ -28,6 +28,7 @@ import ai
 import auth
 import db
 import mailer
+import pending
 from timeutil import (
     calendar_date_of,
     date_range_iso,
@@ -69,6 +70,7 @@ mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 db.init_db()
+pending.start_worker()
 
 
 # --------------------------------------------------------------------------
@@ -548,6 +550,25 @@ def rebucket_entries(conn, user_id: int, old_start: int, new_start: int) -> int:
         conn.executemany(
             "UPDATE entries SET entry_date = ? WHERE id = ?", changes
         )
+    # Wartende Einträge genauso, sonst landen sie nach dem Nachtragen am
+    # Tag der alten Zählweise.
+    waiting = conn.execute(
+        "SELECT id, entry_date, entry_time FROM pending_entries WHERE user_id = ?",
+        (user_id,),
+    ).fetchall()
+    moved = []
+    for row in waiting:
+        try:
+            calendar = calendar_date_of(row["entry_date"], row["entry_time"], old_start)
+            target = logical_date_of(calendar, row["entry_time"], new_start)
+        except (ValueError, TypeError):
+            continue
+        if target != row["entry_date"]:
+            moved.append((target, row["id"]))
+    if moved:
+        conn.executemany(
+            "UPDATE pending_entries SET entry_date = ? WHERE id = ?", moved
+        )
     return len(changes)
 
 
@@ -571,12 +592,21 @@ def list_entries():
         "ORDER BY CASE WHEN entry_time < ? THEN 1 ELSE 0 END, entry_time ASC, id ASC",
         (g.user["id"], entry_date, f"{start:02d}:00"),
     ).fetchall()
+    # Auch ältere Tage: ein Eintrag von gestern, der noch wartet oder
+    # aufgegeben wurde, wäre sonst nirgends mehr zu sehen.
+    waiting = g.conn.execute(
+        "SELECT * FROM pending_entries WHERE user_id = ? AND entry_date <= ? "
+        "ORDER BY entry_date, id",
+        (g.user["id"], entry_date),
+    ).fetchall()
     return jsonify(
         {
             "date": entry_date,
             "calendar_date": today_iso(),
             "day_start_hour": start,
             "entries": [entry_json(r) for r in rows],
+            # Noch nicht geschätzt, zählen in keiner Summe mit.
+            "pending": [pending.pending_json(r) for r in waiting],
         }
     )
 
@@ -607,16 +637,9 @@ def add_entry():
             )
             normalized = description
         else:
-            estimate = ai.estimate_meal(description, goal_direction(g.user))
-            kcal, protein, normalized = (
-                estimate["kcal"],
-                estimate["protein"],
-                estimate["normalized"],
-            )
+            return add_estimated_entry(description, entry_date, entry_time)
     except ValueError as exc:
         return bad(str(exc))
-    except ai.AIError as exc:
-        return bad(str(exc), 502)
 
     cur = g.conn.execute(
         'INSERT INTO entries (user_id, entry_date, entry_time, "desc", kcal, protein, created_at) '
@@ -629,6 +652,67 @@ def add_entry():
         (cur.lastrowid,),
     ).fetchone()
     return jsonify(entry_json(row)), 201
+
+
+def add_estimated_entry(description: str, entry_date: str, entry_time: str):
+    """Freitext-Eintrag über die Warteschlange (siehe pending.py).
+
+    Kommt die Schätzung schnell, antwortet das wie bisher mit dem fertigen
+    Eintrag (201). Dauert sie zu lange oder ist Gemini ausgelastet, ist der
+    Eintrag trotzdem angenommen (202) und wird im Hintergrund nachgetragen.
+    Nur ein Fehler, den auch ein späterer Versuch nicht behebt, kommt wie
+    bisher als Fehlermeldung zurück – die Person sitzt ja noch davor.
+    """
+    pending_id = pending.enqueue(
+        g.conn, g.user["id"], entry_date, entry_time, description, goal_direction(g.user)
+    )
+    outcome = pending.estimate_now(pending_id)
+
+    if outcome and outcome["status"] == "done":
+        row = g.conn.execute(
+            'SELECT id, entry_date, entry_time, "desc", kcal, protein FROM entries WHERE id = ?',
+            (outcome["entry_id"],),
+        ).fetchone()
+        return jsonify(entry_json(row)), 201
+    if outcome and outcome["status"] == "failed":
+        g.conn.execute("DELETE FROM pending_entries WHERE id = ?", (pending_id,))
+        g.conn.commit()
+        return bad(outcome["error"], 502)
+
+    row = g.conn.execute(
+        "SELECT * FROM pending_entries WHERE id = ?", (pending_id,)
+    ).fetchone()
+    message = (
+        "Gemini ist gerade ausgelastet. Der Eintrag ist gespeichert und wird "
+        "automatisch geschätzt, sobald die KI wieder antwortet."
+        if outcome
+        else "Die Schätzung dauert gerade länger. Der Eintrag ist gespeichert "
+        "und wird im Hintergrund nachgetragen."
+    )
+    return jsonify({"pending": pending.pending_json(row) if row else None,
+                    "message": message}), 202
+
+
+@app.route("/api/pending/<int:pending_id>", methods=["DELETE"])
+@require_user
+def delete_pending(pending_id: int):
+    cur = g.conn.execute(
+        "DELETE FROM pending_entries WHERE id = ? AND user_id = ?",
+        (pending_id, g.user["id"]),
+    )
+    g.conn.commit()
+    if not cur.rowcount:
+        # Inzwischen nachgetragen – dann ist es ein normaler Eintrag.
+        return bad("Der Eintrag wurde schon nachgetragen.", 404)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pending/<int:pending_id>/retry", methods=["POST"])
+@require_user
+def retry_pending(pending_id: int):
+    if not pending.retry(g.conn, g.user["id"], pending_id):
+        return bad("Der Eintrag wurde schon nachgetragen.", 404)
+    return jsonify({"ok": True})
 
 
 # Schnellwahl aus den eigenen Einträgen: was in diesem Zeitraum mindestens so

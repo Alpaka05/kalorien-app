@@ -372,6 +372,11 @@ a:hover { color: var(--accent); }
 .entry-kcal { font-family: var(--mono); font-size: 14px; color: var(--text-primary); }
 .entry-protein { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); }
 .empty-state { padding: 16px 0; font-size: 14px; color: var(--text-muted); }
+/* Wartet noch auf die Schätzung: zurückgenommen, damit er nicht wie ein
+   fertiger Eintrag gelesen wird – er zählt in keiner Summe mit. */
+.entry-row.pending .entry-desc { color: var(--text-secondary); }
+.entry-row.pending .entry-kcal { color: var(--text-muted); }
+.entry-row.pending.failed .entry-time { color: var(--warn); }
 
 .edit-form { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .edit-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }

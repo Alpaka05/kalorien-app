@@ -83,6 +83,32 @@ CREATE TABLE IF NOT EXISTS goal_history (
     PRIMARY KEY (user_id, valid_from)
 );
 
+-- Einträge, deren Schätzung noch aussteht, weil Gemini ausgelastet war oder
+-- zu lange brauchte. pending.py arbeitet sie im Hintergrund ab und legt dann
+-- den eigentlichen Eintrag mit dem ursprünglichen Datum und der ursprünglichen
+-- Uhrzeit an. Eine eigene Tabelle statt einer Spalte in entries, damit
+-- entries.kcal nie leer ist und keine Summe die Wartenden mitzählt.
+CREATE TABLE IF NOT EXISTS pending_entries (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    entry_date      TEXT NOT NULL,
+    entry_time      TEXT NOT NULL,
+    "desc"          TEXT NOT NULL,
+    -- Zielrichtung beim Eintragen: sie entscheidet, in welche Richtung die
+    -- Schätzung bei Unsicherheit ausweicht.
+    direction       TEXT NOT NULL DEFAULT 'gain',
+    -- 'waiting' = wird (erneut) versucht, 'failed' = aufgegeben, wartet auf
+    -- die Person (nochmal versuchen oder löschen).
+    status          TEXT NOT NULL DEFAULT 'waiting',
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    last_error      TEXT,
+    next_attempt_at TEXT NOT NULL,
+    -- Gesetzt, solange ein Thread die Zeile bearbeitet. Ein alter Wert heißt:
+    -- der Prozess ist dabei gestorben, die Zeile darf neu vergeben werden.
+    claimed_at      TEXT,
+    created_at      TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS coach_cache (
     user_id     INTEGER NOT NULL,
     day         TEXT NOT NULL,
@@ -100,6 +126,8 @@ CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries (user_id, entry_date
 CREATE INDEX IF NOT EXISTS idx_weights_user_date ON weights (user_id, weigh_date);
 CREATE INDEX IF NOT EXISTS idx_sessions_user      ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_login_codes_email  ON login_codes (email, created_at);
+CREATE INDEX IF NOT EXISTS idx_pending_due        ON pending_entries (status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_pending_user_date  ON pending_entries (user_id, entry_date);
 """
 
 

@@ -42,6 +42,7 @@ const ICON = {
   up: '<path d="M12 19V6"/><path d="M6 11.5l6-6 6 6"/>',
   dash: '<path d="M5 12h14"/>',
   alert: '<path d="M12 4.5 2.5 20h19L12 4.5Z"/><path d="M12 10v4.5"/><path d="M12 17.6v.4"/>',
+  retry: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4.5H15"/>',
 };
 
 function icon(name, size = 16) {
@@ -85,6 +86,7 @@ const state = {
   selectedDay: null,
   editingId: null,
   presets: null,      // Schnellwahl aus /api/presets
+  pendingTimer: null, // Nachfragen, solange Einträge auf ihre Schätzung warten
 };
 
 // --------------------------------------------------------------------------
@@ -152,8 +154,11 @@ async function addEntry(payload, buttonEl, keepLabel = false) {
     }
   }
   try {
-    await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
+    const data = await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
     $('food-input').value = '';
+    // 202: angenommen, aber noch nicht geschätzt – er steht jetzt als
+    // wartender Eintrag in der Liste und wird im Hintergrund nachgetragen.
+    if (data.message) setMessage($('error-msg'), data.message, 'ok');
     await refreshAll();
   } catch (err) {
     setMessage($('error-msg'), err.message);
@@ -179,9 +184,36 @@ function handleAdd() {
 // --------------------------------------------------------------------------
 
 async function loadToday() {
+  const before = waitingIds();
   const data = await api('/api/entries');
   state.today = data;
   renderToday();
+  schedulePendingCheck();
+  // Ist ein wartender Eintrag verschwunden, wurde er nachgetragen (oder an
+  // einem anderen Gerät gelöscht): dann stimmen Verlauf, Schnellwahl und
+  // Einschätzung nicht mehr.
+  const after = new Set(waitingIds());
+  if (before.some((id) => !after.has(id))) {
+    loadSummary().catch(() => {});
+    loadPresets().catch(() => {});
+    loadCoach();
+  }
+}
+
+function waitingIds() {
+  const waiting = (state.today && state.today.pending) || [];
+  return waiting.filter((p) => p.status === 'waiting').map((p) => p.id);
+}
+
+// Solange etwas auf die Schätzung wartet, alle 10 Sekunden nachsehen. Der
+// Server trägt im Hintergrund nach; ohne Nachfrage bliebe die Liste stehen.
+function schedulePendingCheck() {
+  clearTimeout(state.pendingTimer);
+  state.pendingTimer = null;
+  if (!waitingIds().length) return;
+  state.pendingTimer = setTimeout(() => {
+    loadToday().catch(() => schedulePendingCheck());
+  }, 10000);
 }
 
 function renderTodayHint() {
@@ -202,6 +234,7 @@ function renderTodayHint() {
 function renderToday() {
   const list = $('today-list');
   const entries = state.today ? state.today.entries : [];
+  const waiting = (state.today && state.today.pending) || [];
   list.textContent = '';
 
   const totalKcal = entries.reduce((sum, e) => sum + e.kcal, 0);
@@ -210,7 +243,7 @@ function renderToday() {
   renderGoalProgress(totalKcal, totalProtein);
   renderTodayHint();
 
-  if (!entries.length) {
+  if (!entries.length && !waiting.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.textContent = 'Noch nichts eingetragen heute.';
@@ -223,6 +256,67 @@ function renderToday() {
       state.editingId === entry.id ? buildEditForm(entry) : buildEntryRow(entry)
     );
   });
+  // Wartende unten, wo auch ein frisch eingetragener Eintrag erscheinen würde.
+  waiting.forEach((item) => list.appendChild(buildPendingRow(item)));
+}
+
+function buildPendingRow(item) {
+  const row = document.createElement('div');
+  row.className = 'entry-row pending' + (item.status === 'failed' ? ' failed' : '');
+
+  const left = document.createElement('div');
+  const desc = document.createElement('p');
+  desc.className = 'entry-desc';
+  desc.textContent = item.desc;
+  const time = document.createElement('p');
+  time.className = 'entry-time';
+  const onOtherDay = state.today && item.date !== state.today.date;
+  time.textContent =
+    (onOtherDay ? dateShort(item.date) + ', ' : '') +
+    item.time +
+    ' · ' +
+    (item.status === 'failed'
+      ? 'Nicht geschätzt: ' + (item.error || 'unbekannter Fehler')
+      : 'Wird geschätzt, sobald die KI antwortet…');
+  left.append(desc, time);
+
+  const right = document.createElement('div');
+  right.className = 'entry-right';
+  const kcal = document.createElement('span');
+  kcal.className = 'entry-kcal';
+  kcal.textContent = '– kcal';
+  right.appendChild(kcal);
+
+  const action = async (btn, path, method) => {
+    btn.disabled = true;
+    try {
+      await api(path, { method });
+    } catch (err) {
+      // 404: inzwischen nachgetragen – dann einfach neu laden.
+      if (!/nachgetragen/.test(err.message)) setMessage($('error-msg'), err.message);
+    }
+    await refreshAll();
+  };
+
+  const retry = document.createElement('button');
+  retry.className = 'icon-btn';
+  retry.title = 'Jetzt nochmal schätzen';
+  retry.setAttribute('aria-label', 'Jetzt nochmal schätzen');
+  retry.appendChild(icon('retry'));
+  retry.addEventListener('click', () =>
+    action(retry, '/api/pending/' + item.id + '/retry', 'POST')
+  );
+
+  const del = document.createElement('button');
+  del.className = 'icon-btn danger';
+  del.title = 'Eintrag verwerfen';
+  del.setAttribute('aria-label', 'Eintrag verwerfen');
+  del.appendChild(icon('trash'));
+  del.addEventListener('click', () => action(del, '/api/pending/' + item.id, 'DELETE'));
+
+  right.append(retry, del);
+  row.append(left, right);
+  return row;
 }
 
 function buildEntryRow(entry) {

@@ -75,7 +75,21 @@ _unknown_models: set[str] = set()
 
 
 class AIError(Exception):
-    """Fehler, dessen Text der Nutzerin gezeigt werden darf."""
+    """Fehler, dessen Text der Nutzerin gezeigt werden darf.
+
+    `retryable` unterscheidet Aussetzer, die sich von selbst geben (Gemini
+    überlastet, Limit erreicht, keine Antwort), von Fehlern, die ein späterer
+    Versuch nicht behebt (falscher Key, abgelehnte Anfrage). Nur Erstere
+    landen in der Warteschlange für Einträge, siehe pending.py.
+    """
+
+    def __init__(self, message: str, retryable: bool = False):
+        super().__init__(message)
+        self.retryable = retryable
+
+
+def _transient(message: str) -> AIError:
+    return AIError(message, retryable=True)
 
 
 class _BadRequest(Exception):
@@ -186,19 +200,19 @@ def _give_up(last_exc: Exception | None, statuses: list[int]):
         raise AIError(f"Das Modell {GEMINI_MODEL} ist unbekannt.") from last_exc
     if isinstance(last_exc, urllib.error.HTTPError):
         if last_exc.code == 429:
-            raise AIError(
+            raise _transient(
                 "Gemini-Limit erreicht. Bitte gleich nochmal versuchen."
             ) from last_exc
         if last_exc.code in (500, 503):
-            raise AIError(
+            raise _transient(
                 "Gemini ist gerade überlastet. Bitte in ein paar Minuten nochmal versuchen."
             ) from last_exc
-        raise AIError("Die KI-Anfrage ist fehlgeschlagen.") from last_exc
+        raise _transient("Die KI-Anfrage ist fehlgeschlagen.") from last_exc
     if _is_timeout(last_exc):
-        raise AIError(
+        raise _transient(
             "Gemini hat nicht rechtzeitig geantwortet. Bitte nochmal versuchen."
         ) from last_exc
-    raise AIError("Keine Verbindung zur Gemini-API.") from last_exc
+    raise _transient("Keine Verbindung zur Gemini-API.") from last_exc
 
 
 def _is_timeout(exc: Exception) -> bool:
@@ -259,7 +273,7 @@ def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str) -> dic
         raise
     except Exception as exc:  # Unerwartetes darf keine 500-Seite erzeugen
         log.exception("Unerwarteter Fehler beim Gemini-Aufruf")
-        raise AIError("Die KI-Anfrage ist fehlgeschlagen.") from exc
+        raise _transient("Die KI-Anfrage ist fehlgeschlagen.") from exc
 
     # Wurde schon der Prompt blockiert, gibt es keine Kandidaten.
     feedback = response.get("promptFeedback") or {}
@@ -269,14 +283,14 @@ def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str) -> dic
 
     candidates = response.get("candidates") or []
     if not candidates:
-        raise AIError("Von der KI kam keine verwertbare Antwort.")
+        raise _transient("Von der KI kam keine verwertbare Antwort.")
     candidate = candidates[0]
     finish = candidate.get("finishReason")
     if finish == "MAX_TOKENS":
         # Bei Modellen mit Thinking teilen sich Denk- und Antworttokens das
         # Budget; hier wurde es ausgeschöpft.
         log.error("maxOutputTokens (%d) erschöpft – Budget in ai.py erhöhen", max_tokens)
-        raise AIError("Die Antwort wurde abgeschnitten. Bitte nochmal versuchen.")
+        raise _transient("Die Antwort wurde abgeschnitten. Bitte nochmal versuchen.")
     if finish in ("SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"):
         log.error("Gemini hat die Antwort abgebrochen: %s", finish)
         raise AIError("Die KI hat diese Anfrage abgelehnt.")
@@ -285,11 +299,11 @@ def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str) -> dic
     # Denk-Teile (thought=true) überspringen, nur die eigentliche Antwort nehmen.
     text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
     if not text.strip():
-        raise AIError("Von der KI kam keine verwertbare Antwort.")
+        raise _transient("Von der KI kam keine verwertbare Antwort.")
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:
-        raise AIError("Die Antwort der KI war nicht lesbar.") from exc
+        raise _transient("Die Antwort der KI war nicht lesbar.") from exc
 
 
 # --------------------------------------------------------------------------
