@@ -17,7 +17,6 @@ colors:
   warn: "#976927"
   warn-bg: "#F7EFE0"
   on-accent: "#FFFFFF"
-  backdrop: "rgba(43, 42, 38, 0.4)"
 typography:
   display:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -57,7 +56,6 @@ rounded:
   sm: "8px"
   md: "12px"
   lg: "14px"
-  xl: "18px"
   pill: "15px"
 spacing:
   xs: "4px"
@@ -118,12 +116,6 @@ components:
     textColor: "{colors.text-primary}"
     rounded: "{rounded.lg}"
     padding: "14px 16px"
-  modal:
-    backgroundColor: "{colors.bg}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.xl}"
-    padding: "20px"
-    width: "420px"
 ---
 
 # Design System: Kalorien-Tagebuch
@@ -152,8 +144,8 @@ consumer-app maximalism.
 - Cream-paper ground with white surfaces; a warm-brown dark mode, never pure black (only the opt-in OLED scheme uses a #000000 ground).
 - One accent — a desaturated garden green — carrying every affirmative signal.
 - Monospace for every comparable number; system sans for all prose.
-- A single 560px column, no navigation, one settings modal.
-- Hairline 1px borders and tonal layering; one shadow, reserved for the overlay.
+- A single 560px column, no navigation; settings replace it as a view of their own.
+- Hairline 1px borders and tonal layering; no shadows, because nothing floats.
 - Motion as response, not animation: one authored moment, everything else under 200ms.
 
 ## Colors
@@ -254,7 +246,7 @@ by eye for a narrow column rather than snapped to a ratio.
   coach headline at 14.5px.
 - **Body** (400, 14.5px, line-height 1.55): Entry descriptions. Supporting prose and
   coach messages run at 13.5px in Ink Secondary.
-- **Label** (400, 12.5px): Card labels and modal field labels. Drops to 11.5px for
+- **Label** (400, 12.5px): Card labels and settings field labels. Drops to 11.5px for
   inline field labels in the edit row.
 - **Code** (400, 20px, mono, letter-spacing 0.28em): The six-digit login code, spaced
   wide and centered so digits are countable.
@@ -276,7 +268,8 @@ network round trip on the exact interaction that must feel instant.
 
 A single centered column, `max-width: 560px`, with `2rem 1.25rem 4rem` of body
 padding — one destination, no navigation, no sidebar, no tabs. The login page uses a
-narrower 380px column offset `8vh` from the top; the settings modal caps at 420px.
+narrower 380px column offset `8vh` from the top; the settings view uses the same 560px
+column as the main view.
 
 Vertical rhythm is built from a small set of repeated gaps rather than a strict
 baseline grid: `8px` between paired controls, `1rem` after a message or chip row,
@@ -305,24 +298,18 @@ be zoomed, text size has to be readable as shipped.
 
 ## Elevation & Depth
 
-The implemented system is entirely flat: there is not one `box-shadow` on a resting
-surface anywhere in the stylesheet. Depth comes from two devices only — a tonal step
-between the page ground and the surface above it (`#FAF8F3` → `#FFFFFF` in light,
+The implemented system is entirely flat: there is not one decorative `box-shadow`
+anywhere in the stylesheet. Depth comes from two devices only — a tonal step between
+the page ground and the surface above it (`#FAF8F3` → `#FFFFFF` in light,
 `#191817` → `#222120` in dark), and a 1px hairline border on every raised element.
-Even the modal, the most elevated thing in the app, separates itself with a
-translucent scrim (`rgba(43, 42, 38, 0.4)`) and a stronger border rather than a lift.
 
-One shadow exists, and only one: the settings modal. Depth is spent where depth means
-something — an overlay is genuinely on a different plane than the page — and nowhere
-else. Cards, panels, chips, and buttons stay flat at rest and always will.
+Nothing floats above the page. The settings used to be a modal with a scrim and the
+system's only shadow; they are now a view that replaces the main one, so there is no
+second plane left to separate. Cards, panels, chips, and buttons stay flat at rest and
+always will.
 
 ### Shadow Vocabulary
 
-- **Overlay** (`--shadow-overlay`, two warm layers: `0 12px 32px -8px` at 20% plus
-  `0 2px 8px -2px` at 10% of the ink color): The settings modal only. Tinted from
-  `--text-primary` rather than pure black, so it stays in the warm family, and carries
-  a real offset with a soft blur. The dark-theme variant deepens to 64%/40% black,
-  because a warm shadow is invisible on a warm-dark ground.
 - **Focus ring** (`box-shadow: 0 0 0 1px var(--accent)`): Paired with a border shift
   to `--accent` on focused inputs and selects, so border and ring read as one solid
   2px line — the same weight as the `:focus-visible` outline everywhere else.
@@ -330,7 +317,7 @@ else. Cards, panels, chips, and buttons stay flat at rest and always will.
 ### Named Rules
 
 **The Flat-At-Rest Rule.** A surface that sits in the page does not cast a shadow. Only
-something that floats above the page does, and today exactly one thing floats. Adding a
+something that genuinely floats above the page may, and today nothing does. Adding a
 shadow to a card, chip, or button to make it "pop" is the decorative use this system
 rejects.
 
@@ -338,7 +325,7 @@ rejects.
 
 Softly rounded rectangles throughout, on a scale that increases with the size of the
 surface: `8px` on 32px icon buttons, `12px` on 44px inputs and buttons (the `--radius`
-default), `14px` on cards and panels, `18px` on the modal. Chips are the one fully
+default), `14px` on cards and panels. Chips are the one fully
 rounded form — `15px` on a 30px height, a true pill, marking them as taps rather than
 fields.
 
@@ -412,17 +399,21 @@ border color (`--border` → `--border-strong`) or the surface tone, not the wid
   deliberately `type="text"` with `inputmode="decimal"` — with `type="number"`, Safari
   silently discards a comma decimal ("68,5") while still displaying it.
 
-### Modal / Settings
+### Settings View
 
-- **Style:** The only overlay. A translucent scrim over the page, top-aligned with
-  `2rem 1.25rem` padding and its own scroll, so a tall settings panel works on a short
-  phone. The panel itself uses the *page* ground (`--bg`) rather than Card White,
-  inverting the usual figure/ground relationship so it reads as a surface you moved to
-  rather than one floating above.
-- **Corner:** 14px, with a Hairline Strong border.
-- **Structure:** Title row with a close icon button, stacked 14px-spaced fields each
-  with a label and an optional 12px muted hint, a message line, two equal-width
-  actions, then a hairline divider and a column of link-style secondary actions.
+- **Style:** Not an overlay but a place you move to. The menu button swaps the whole
+  main view for the settings view in the same 560px column, on the same page ground,
+  with no scrim, border, or shadow. It always opens scrolled to the top; going back
+  restores the main view's scroll position.
+- **Head:** A back-arrow icon button in front of a 22px display heading
+  "Einstellungen", with the same `1.75rem` gap to the content as the main subtitle.
+- **Navigation:** Opening pushes a history entry, so the phone's back gesture and the
+  browser's back button return to the main view instead of leaving the app. The back
+  arrow, "Abbrechen", Escape, and a successful save all go back the same way. A reload
+  while the settings are open keeps them open.
+- **Structure:** Stacked 14px-spaced fields each with a label and an optional 12px
+  muted hint, a message line, two equal-width actions, then a hairline divider and a
+  column of link-style secondary actions.
 
 ### Coach Panel
 
@@ -474,7 +465,8 @@ Every icon is drawn, never typed. All paths live in one `ICON` map in `app.js` a
 through a single helper at a fixed `1.75` stroke width on a 24-unit grid, with round caps
 and joins — the same stroke as the select chevron, so a field arrow and a delete button
 look like they came from one hand. The set is deliberately small: pencil, trash, check, up,
-down, dash, warning, and the two chart chevrons plus the close X inlined in the markup.
+down, dash, warning, and the two chart chevrons plus the settings back arrow inlined in
+the markup.
 Icons inherit `currentColor`, so an icon button's hover state needs no icon-specific rule.
 
 Size is 16px inside 32px icon buttons and 18px for the coach status. The one non-path
