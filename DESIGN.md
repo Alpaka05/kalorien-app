@@ -170,7 +170,8 @@ and an amber for caution.
   goal-progress fill, and draws focus rings. It is the system's only affirmative
   voice.
 - **Deep Garden Green** (`#2E5643` light, `#8AC2A4` dark): The stronger sibling. Used
-  for primary-button hover, link text, and "good" notes.
+  for primary-button hover, the selected chart bar's outline, link text, and "good"
+  notes.
 - **Garden Wash** (`#E7F0EA` light, `#23332B` dark): The faint accent field behind
   hovered chips and icon buttons, and active range toggles.
 
@@ -326,9 +327,6 @@ else. Cards, panels, chips, and buttons stay flat at rest and always will.
 - **Focus ring** (`box-shadow: 0 0 0 1px var(--accent)`): Paired with a border shift
   to `--accent` on focused inputs and selects, so border and ring read as one solid
   2px line — the same weight as the `:focus-visible` outline everywhere else.
-- **Today marker** (`box-shadow: inset 0 0 0 1px var(--accent-dark)`): An inset
-  hairline on today's chart bar — deliberately quiet so it doesn't outshout the
-  selected bar.
 
 ### Named Rules
 
@@ -455,20 +453,21 @@ Three details carry the craft:
 - Focus is moved off the column and onto the bar (`:focus-visible .week-bar`), because
   a ring around a full-height column highlights empty space.
 - Hover and selection never recolor a bar, so its own color — the answer to "did I make
-  it" — stays readable. Hover draws a 1px Ink Muted outline flush on the bar (mouse
-  only, `hover: hover`); the selected day gets a 2px Ink Secondary outline. The column
-  must also cancel the generic `button:hover` fill, which otherwise paints the whole
-  column.
+  it" — stays readable. Both draw a 2px outline flush on the bar: Ink Secondary on hover
+  (mouse only, `hover: hover`), Deep Garden Green when selected — `accent-dark`, not
+  `accent`, because an accent ring around a met (accent) bar would vanish. Today gets
+  no bar marker at all, only the bold day label. The column must also cancel the
+  generic `button:hover` fill, which otherwise paints the whole column.
 - Bars carry `flex-shrink: 0`, without which tall days compress to equal heights.
 - The total and label slots hold a fixed minimum height even when empty, so the
   30-day view — which labels only every fifth day — keeps a common baseline.
 
-A dashed Hairline Strong goal line crosses the chart with its value in 10px mono. The
-current goal is labeled in a 40px gutter to the right of the bars, on two lines at the
-line's height — inside the plot it always covered the total of a day close to the goal.
-Older goals within the range keep an inline label on their own stretch of line, backed
-by the page color. The label names what the line is in that mode — "Ziel" when
-gaining, "Grenze" when losing.
+A dashed Hairline Strong goal line crosses the chart. The current goal is not labeled
+on the line — there it always covered the total of a day close to the goal — but in a
+small legend (dashed swatch plus value in 10.5px mono) at the right end of the note
+row under the chart, so the bars keep their full width. Older goals within the range
+keep an inline label on their own stretch of line, backed by the page color. The label
+names what the line is in that mode — "Ziel" when gaining, "Grenze" when losing.
 
 ### Icons
 

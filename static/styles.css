@@ -379,17 +379,9 @@ a:hover { color: var(--accent); }
 .field-label { font-size: 11.5px; color: var(--text-muted); display: block; margin-bottom: 3px; }
 
 .chart-nav { display: flex; align-items: center; gap: 4px; }
-.week-chart {
-  display: flex; align-items: flex-end; gap: 6px; height: 140px; margin-bottom: 4px; position: relative;
-  /* Rechts eine eigene Spalte für die Beschriftung der Ziellinie. Stand sie
-     im Diagramm, lag sie zwangsläufig über der Zahl eines Tages, der nahe am
-     Ziel war – links wie rechts. app.js rechnet die Spaltenbreiten deshalb
-     ohne diesen Rand. */
-  --chart-gutter: 40px;
-  padding-right: var(--chart-gutter);
-}
+.week-chart { display: flex; align-items: flex-end; gap: 6px; height: 140px; margin-bottom: 4px; position: relative; }
 .goal-line {
-  position: absolute; left: 0; right: var(--chart-gutter); border-top: 1px dashed var(--border-strong);
+  position: absolute; left: 0; right: 0; border-top: 1px dashed var(--border-strong);
   pointer-events: none;
   /* Über den Balken, sonst überdeckt die Säule die Beschriftung. */
   z-index: 1;
@@ -397,13 +389,6 @@ a:hover { color: var(--accent); }
 .goal-line span {
   position: absolute; left: 0; top: -15px; font-size: 10px;
   font-family: var(--mono); color: var(--text-muted); background: var(--bg); padding: 0 3px;
-}
-/* Das aktuelle Ziel (letztes Stück der Linie) steht in der Randspalte, auf
-   Höhe der Linie und zweizeilig, damit es in 40px passt. Ältere Ziele im
-   Zeitraum behalten ihre Beschriftung auf der Linie. */
-.goal-line span.goal-tag-axis {
-  left: calc(100% + 4px); top: 0; transform: translateY(-50%);
-  padding: 0; background: none; line-height: 12px; white-space: pre-line;
 }
 .week-col {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;
@@ -416,17 +401,19 @@ a:hover { color: var(--accent); }
    vom Balken war nichts mehr zu sehen. */
 .week-col:hover:not(:disabled) { background: none; }
 .week-col:active:not(:disabled) { transform: none; }
-/* Hover und Auswahl zeichnen nur einen Rahmen direkt am Balken und lassen
-   seine Farbe in Ruhe: die Farbe sagt, ob das Ziel erreicht wurde, und das
-   soll lesbar bleiben. Vorher füllte die Auswahl den Balken grün – auch an
-   Tagen, die das Ziel verfehlt hatten.
-   Hover nur mit echter Maus: auf dem Handy bliebe der Rahmen nach dem
-   Antippen am Balken hängen. */
+/* Hover und Auswahl zeichnen nur einen 2px-Rahmen direkt am Balken und
+   lassen seine Farbe in Ruhe: die Farbe sagt, ob das Ziel erreicht wurde, und
+   das soll lesbar bleiben. Vorher füllte die Auswahl den Balken grün – auch
+   an Tagen, die das Ziel verfehlt hatten.
+   Hover hellgrau und nur mit echter Maus: auf dem Handy bliebe der Rahmen
+   nach dem Antippen am Balken hängen. */
 @media (hover: hover) {
-  .week-col:hover .week-bar { outline-color: var(--text-muted); }
+  .week-col:hover .week-bar { outline-color: var(--text-secondary); }
 }
-/* Nach dem Hover-Block, damit die Auswahl beim Überfahren sichtbar bleibt. */
-.week-col.selected .week-bar { outline: 2px solid var(--text-secondary); }
+/* Auswahl grün wie ein aktiver Button. --accent-dark statt --accent, weil
+   ein Rahmen in --accent um einen erreichten (grünen) Balken unsichtbar
+   wäre. Steht nach dem Hover-Block, damit sie beim Überfahren bleibt. */
+.week-col.selected .week-bar { outline-color: var(--accent-dark); }
 /* Die Spalte ist ein Button über die volle Diagrammhöhe. Ohne diese Regel
    zeichnet der Browser seinen Fokusring um die ganze Spalte – hervorgehoben
    werden soll aber nur die Säule selbst. */
@@ -438,7 +425,7 @@ a:hover { color: var(--accent); }
   background: var(--border-strong);
   transition: background var(--dur-fast) var(--ease),
               outline-color var(--dur-fast) var(--ease);
-  outline: 1px solid transparent; outline-offset: 0;
+  outline: 2px solid transparent; outline-offset: 0;
   /* Nicht stauchen lassen: sonst werden alle hohen Tage auf dieselbe Höhe
      gequetscht und der höchste Balken ist immer zu kurz. */
   flex-shrink: 0;
@@ -447,8 +434,6 @@ a:hover { color: var(--accent); }
 /* Nur beim Abnehmen: ein Tag über der Grenze. Dieselbe Bedeutung wie die
    bernsteinfarbene Notiz auf der Tageskarte, deshalb dieselbe Farbe. */
 .week-bar.over { background: var(--warn); }
-/* Heute nur dezent markieren, damit es der Auswahl nicht die Show stiehlt. */
-.week-bar.today { box-shadow: inset 0 0 0 1px var(--accent-dark); }
 .week-total {
   font-size: 10px; font-family: var(--mono); color: var(--text-secondary);
   min-height: 12px; line-height: 12px;
@@ -461,7 +446,24 @@ a:hover { color: var(--accent); }
   min-height: 15px; line-height: 15px;
 }
 .week-label.today { color: var(--text-primary); font-weight: 600; }
-.chart-scale-note { font-size: 11.5px; color: var(--text-muted); margin: 0 0 1rem; }
+.chart-foot {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin: 0 0 1rem;
+}
+.chart-scale-note { font-size: 11.5px; color: var(--text-muted); margin: 0; }
+/* Das aktuelle Ziel als Legende unter dem Diagramm statt auf der Linie: dort
+   verdeckte es zwangsläufig die Zahl eines Tages nahe am Ziel, und eine
+   eigene Randspalte hätte die Balken schmaler gemacht. */
+.chart-goal {
+  flex-shrink: 0; white-space: nowrap;
+  font-size: 10.5px; font-family: var(--mono); color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.chart-goal::before {
+  content: ""; display: inline-block; width: 14px; margin-right: 6px;
+  border-top: 1px dashed var(--border-strong); vertical-align: middle;
+}
+.chart-goal[hidden] { display: none; }
 
 .day-detail {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
