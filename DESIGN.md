@@ -170,7 +170,7 @@ and an amber for caution.
   goal-progress fill, and draws focus rings. It is the system's only affirmative
   voice.
 - **Deep Garden Green** (`#2E5643` light, `#8AC2A4` dark): The stronger sibling. Used
-  for primary-button hover, selected chart bars, link text, and "good" notes.
+  for primary-button hover, link text, and "good" notes.
 - **Garden Wash** (`#E7F0EA` light, `#23332B` dark): The faint accent field behind
   hovered chips and icon buttons, and active range toggles.
 
@@ -178,9 +178,7 @@ and an amber for caution.
 
 - **Muted Amber** (`#976927` light, `#D2A25C` dark): Caution, not alarm. Marks a goal
   bar pushed past target, history bars over the ceiling in losing mode, and "warn"
-  notes. Paired with **Amber Wash** (`#F7EFE0` / `#332A1B`) and, for the hover and
-  selected states of an amber chart bar, **Strong Amber** (`#6F4C1B` / `#E8C089`) —
-  the same role `accent-dark` plays for green.
+  notes. Paired with **Amber Wash** (`#F7EFE0` / `#332A1B`).
 
 ### Tertiary
 
@@ -456,16 +454,21 @@ Three details carry the craft:
 
 - Focus is moved off the column and onto the bar (`:focus-visible .week-bar`), because
   a ring around a full-height column highlights empty space.
-- Hover never recolors: it draws a 1px Ink Muted outline 2px off the bar, so the bar's
-  own color — the answer to "did I make it" — stays readable. The column must also
-  cancel the generic `button:hover` fill, which otherwise paints the whole column.
+- Hover and selection never recolor a bar, so its own color — the answer to "did I make
+  it" — stays readable. Hover draws a 1px Ink Muted outline flush on the bar (mouse
+  only, `hover: hover`); the selected day gets a 2px Ink Secondary outline. The column
+  must also cancel the generic `button:hover` fill, which otherwise paints the whole
+  column.
 - Bars carry `flex-shrink: 0`, without which tall days compress to equal heights.
 - The total and label slots hold a fixed minimum height even when empty, so the
   30-day view — which labels only every fifth day — keeps a common baseline.
 
-A dashed Hairline Strong goal line crosses the chart with its value in 10px mono,
-backed by the page color so the line doesn't run through the digits. Its label names
-what the line is in that mode — "Ziel" when gaining, "Grenze" when losing.
+A dashed Hairline Strong goal line crosses the chart with its value in 10px mono. The
+current goal is labeled in a 40px gutter to the right of the bars, on two lines at the
+line's height — inside the plot it always covered the total of a day close to the goal.
+Older goals within the range keep an inline label on their own stretch of line, backed
+by the page color. The label names what the line is in that mode — "Ziel" when
+gaining, "Grenze" when losing.
 
 ### Icons
 

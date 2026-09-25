@@ -584,7 +584,9 @@ function renderSummary() {
   // (18 px Spalte gegen 27 px Zahl), auf dem Desktop reichlich. Deshalb hier
   // ausrechnen statt eine feste Grenze zu raten.
   const columns = data.series.length;
-  const chartWidth = chart.getBoundingClientRect().width || 335;
+  // Ohne die Randspalte rechts, in der die Beschriftung der Ziellinie steht.
+  const gutter = parseFloat(getComputedStyle(chart).paddingRight) || 0;
+  const chartWidth = (chart.getBoundingClientRect().width || 375) - gutter;
   const widthPerColumn = (gap) => (chartWidth - (columns - 1) * gap) / columns;
   const dense = widthPerColumn(6) < 28; // Platz für die Zahl über dem Balken?
   chart.style.gap = dense ? '2px' : '6px';
@@ -615,12 +617,16 @@ function renderSummary() {
       line.style.right = 'auto';
       line.style.width = span * perColumn + (span - 1) * gap + 'px';
     }
-    // Beschriftung nur am letzten Stück (dem aktuellsten Ziel im Zeitraum)
-    // und an Stücken, die breit genug für die Zahl sind.
+    // Das letzte Stück (das aktuellste Ziel im Zeitraum) wird in der
+    // Randspalte rechts beschriftet, wo es keine Tageszahl verdecken kann.
+    // Ältere Stücke nur auf der Linie und nur, wenn sie breit genug sind.
     const width = (segment.to - segment.from + 1) * (perColumn + gap);
-    if (index === segments.length - 1 || width >= 70) {
+    const current = index === segments.length - 1;
+    if (current || width >= 70) {
       const tag = document.createElement('span');
-      tag.textContent = (segment.losing ? 'Grenze ' : 'Ziel ') + fmtNum(segment.goal);
+      const name = segment.losing ? 'Grenze' : 'Ziel';
+      tag.textContent = name + (current ? '\n' : ' ') + fmtNum(segment.goal);
+      if (current) tag.className = 'goal-tag-axis';
       line.appendChild(tag);
     }
     chart.appendChild(line);
