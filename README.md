@@ -27,8 +27,10 @@ von Google AI Studio kostenlos.
   wo du nachgelassen hast
 - **Verlauf** – 7, 14 oder 30 Tage, beliebig weiter zurückblätterbar; ein Klick
   auf einen Balken zeigt, was an dem Tag wann gegessen wurde
-- **Schnellwahl** – feste Chips für die üblichen Gerichte und Getränke, ein Tap
-  genügt (ohne neuen API-Aufruf)
+- **Schnellwahl** – deine häufigsten Einträge der letzten 60 Tage (ab zwei
+  Mal) als Chips, das Häufigste vorne; ein Tap genügt (ohne neuen API-Aufruf).
+  Die Werte kommen vom jüngsten Eintrag, eine Korrektur gilt also auch für den
+  Chip
 - **Gewichts-Tracking** mit Trend über 30 Tage
 - **CSV-Export** aller Einträge
 

@@ -618,6 +618,61 @@ def add_entry():
     return jsonify(entry_json(row)), 201
 
 
+# Schnellwahl aus den eigenen Einträgen: was in diesem Zeitraum mindestens so
+# oft vorkam, wird ein Knopf.
+PRESET_DAYS = 60
+PRESET_MIN_COUNT = 2
+PRESET_LIMIT = 20
+
+
+def preset_key(description: str) -> str:
+    """Vergleichsschlüssel: gleiche Beschreibung trotz anderer Schreibweise."""
+    return " ".join(description.split()).casefold()
+
+
+@app.route("/api/presets", methods=["GET"])
+@require_user
+def list_presets():
+    today = user_today(g.user)
+    rows = g.conn.execute(
+        'SELECT entry_date, entry_time, id, "desc", kcal, protein FROM entries '
+        "WHERE user_id = ? AND entry_date BETWEEN ? AND ? "
+        "ORDER BY entry_date DESC, entry_time DESC, id DESC",
+        (g.user["id"], day_offset_iso(PRESET_DAYS - 1, today), today),
+    ).fetchall()
+    # Neueste zuerst: der erste Treffer je Gericht liefert die Werte, damit
+    # eine nachträgliche Korrektur für alle künftigen Tipps gilt.
+    groups: dict[str, dict] = {}
+    for rank, row in enumerate(rows):
+        key = preset_key(row["desc"])
+        if not key:
+            continue
+        group = groups.get(key)
+        if group is None:
+            groups[key] = {
+                "desc": " ".join(row["desc"].split()),
+                "kcal": round(row["kcal"]),
+                "protein": None if row["protein"] is None else round(row["protein"]),
+                "count": 1,
+                "recency": rank,
+            }
+        else:
+            group["count"] += 1
+    presets = sorted(
+        (p for p in groups.values() if p["count"] >= PRESET_MIN_COUNT),
+        key=lambda p: (-p["count"], p["recency"]),
+    )[:PRESET_LIMIT]
+    for preset in presets:
+        del preset["recency"]
+    return jsonify(
+        {
+            "days": PRESET_DAYS,
+            "min_count": PRESET_MIN_COUNT,
+            "presets": presets,
+        }
+    )
+
+
 @app.route("/api/entries/<int:entry_id>", methods=["PATCH"])
 @require_user
 def update_entry(entry_id: int):
