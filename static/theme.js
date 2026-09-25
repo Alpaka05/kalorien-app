@@ -1,6 +1,6 @@
 'use strict';
 
-/* Farbschema: hell, dunkel oder nach Systemeinstellung.
+/* Farbschema: hell, dunkel, OLED-Schwarz oder nach Systemeinstellung.
  *
  * Diese Datei wird im <head> geladen und blockiert absichtlich das erste
  * Zeichnen. Liefe sie erst am Seitenende, sähe man im Dunkelmodus für einen
@@ -14,7 +14,7 @@
  */
 (function () {
   const KEY = 'kcal-theme';
-  const CHOICES = ['system', 'light', 'dark'];
+  const CHOICES = ['system', 'light', 'dark', 'oled'];
   const media = window.matchMedia('(prefers-color-scheme: dark)');
 
   function stored() {
@@ -50,20 +50,20 @@
   /* Farbe der Browserleiste (iOS Safari, Chrome auf Android). Ohne das bleibt
    * oben ein heller Streifen über der dunklen Seite stehen.
    *
-   * Die beiden Werte sind Kopien von --bg aus styles.css. Eine
+   * Die Werte sind Kopien von --bg aus styles.css. Eine
    * prefers-color-scheme-Variante von <meta name="theme-color"> hilft hier
    * nicht: sie würde die ausdrückliche Wahl in den Einstellungen übergehen.
    */
-  const BAR_COLOR = { light: '#FAF8F3', dark: '#191817' };
+  const BAR_COLOR = { light: '#FAF8F3', dark: '#191817', oled: '#000000' };
 
-  function paintBrowserBar(theme) {
+  function paintBrowserBar(key) {
     let meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) {
       meta = document.createElement('meta');
       meta.name = 'theme-color';
       document.head.appendChild(meta);
     }
-    meta.content = BAR_COLOR[theme];
+    meta.content = BAR_COLOR[key];
   }
 
   function apply() {
@@ -72,12 +72,22 @@
     // "light" oder "dark". Das CSS braucht so nur einen Dunkel-Block, und
     // Erweiterungen sehen einen eindeutigen Zustand statt einer Mischung aus
     // Attribut und Media Query.
-    const theme = choice === 'system' ? (media.matches ? 'dark' : 'light') : choice;
-    document.documentElement.dataset.theme = theme;
+    //
+    // OLED ist kein drittes Theme, sondern der Dunkelmodus mit schwarzem
+    // Grund: data-theme bleibt "dark", damit jede Dunkel-Regel im CSS (etwa
+    // der Pfeil der Auswahlfelder) weiter greift, und data-oled legt nur die
+    // Flächenfarben darüber.
+    const oled = choice === 'oled';
+    const theme = choice === 'system' ? (media.matches ? 'dark' : 'light')
+      : oled ? 'dark' : choice;
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    if (oled) root.dataset.oled = '';
+    else delete root.dataset.oled;
     // color-scheme mitziehen, damit Scrollbalken, Formularelemente und der
     // von Chrome erzwungene Dunkelmodus dasselbe annehmen wie die Seite.
-    document.documentElement.style.colorScheme = theme;
-    paintBrowserBar(theme);
+    root.style.colorScheme = theme;
+    paintBrowserBar(oled ? 'oled' : theme);
     lockExtensions(theme === 'dark');
   }
 
