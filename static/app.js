@@ -584,9 +584,7 @@ function renderSummary() {
   // (18 px Spalte gegen 27 px Zahl), auf dem Desktop reichlich. Deshalb hier
   // ausrechnen statt eine feste Grenze zu raten.
   const columns = data.series.length;
-  // Ohne die Randspalte rechts, in der die Beschriftung der Ziellinie steht.
-  const gutter = parseFloat(getComputedStyle(chart).paddingRight) || 0;
-  const chartWidth = (chart.getBoundingClientRect().width || 375) - gutter;
+  const chartWidth = chart.getBoundingClientRect().width || 335;
   const widthPerColumn = (gap) => (chartWidth - (columns - 1) * gap) / columns;
   const dense = widthPerColumn(6) < 28; // Platz für die Zahl über dem Balken?
   chart.style.gap = dense ? '2px' : '6px';
@@ -604,6 +602,13 @@ function renderSummary() {
     if (last && last.goal === dayGoal(day) && last.losing === dayLosing(day)) last.to = index;
     else segments.push({ goal: dayGoal(day), losing: dayLosing(day), from: index, to: index });
   });
+  const current = segments[segments.length - 1];
+  const legend = $('chart-goal');
+  legend.hidden = !(current && current.goal);
+  legend.textContent = legend.hidden
+    ? ''
+    : (current.losing ? 'Grenze ' : 'Ziel ') + fmtNum(current.goal);
+
   segments.forEach((segment, index) => {
     if (!segment.goal) return;
     const line = document.createElement('div');
@@ -617,16 +622,13 @@ function renderSummary() {
       line.style.right = 'auto';
       line.style.width = span * perColumn + (span - 1) * gap + 'px';
     }
-    // Das letzte Stück (das aktuellste Ziel im Zeitraum) wird in der
-    // Randspalte rechts beschriftet, wo es keine Tageszahl verdecken kann.
-    // Ältere Stücke nur auf der Linie und nur, wenn sie breit genug sind.
+    // Das letzte Stück (das aktuellste Ziel im Zeitraum) steht als Legende
+    // unter dem Diagramm, wo es keine Tageszahl verdecken kann. Ältere Stücke
+    // nur auf der Linie und nur, wenn sie breit genug sind.
     const width = (segment.to - segment.from + 1) * (perColumn + gap);
-    const current = index === segments.length - 1;
-    if (current || width >= 70) {
+    if (index < segments.length - 1 && width >= 70) {
       const tag = document.createElement('span');
-      const name = segment.losing ? 'Grenze' : 'Ziel';
-      tag.textContent = name + (current ? '\n' : ' ') + fmtNum(segment.goal);
-      if (current) tag.className = 'goal-tag-axis';
+      tag.textContent = (segment.losing ? 'Grenze ' : 'Ziel ') + fmtNum(segment.goal);
       line.appendChild(tag);
     }
     chart.appendChild(line);
@@ -656,7 +658,6 @@ function renderSummary() {
     } else if (goal && day.total >= goal) {
       bar.classList.add('reached');
     }
-    if (isToday) bar.classList.add('today');
     bar.style.height = Math.max(4, Math.round((day.total / maxValue) * chartHeight)) + 'px';
 
     const label = document.createElement('span');
