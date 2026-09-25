@@ -297,9 +297,13 @@ order: input, quick chips, stats, coach, today's entries, history chart, weight,
 disclaimer. Never introduce a sidebar, a tab bar, or a second column — the whole
 interface is meant to be thumbed through in one scroll.
 
-**The 16px Zoom Guard.** Below 420px every form field goes to 16px. Anything smaller
-makes iOS Safari zoom into the page on tap and never zoom back out. Heights stay
-unchanged. Never ship a mobile field under 16px.
+**The 16px Zoom Guard.** On touch screens (`pointer: coarse`) and below 420px every
+form field goes to 16px. Anything smaller makes iOS Safari zoom into the page on tap
+and never zoom back out. Heights stay unchanged. Never ship a mobile field under 16px.
+Gesture zoom is switched off on purpose, at the owner's request: the viewport sets
+`user-scalable=no`, `html` carries `touch-action: pan-x pan-y`, and `nozoom.js`
+cancels the pinch gesture iOS Safari would otherwise still allow. Because nothing can
+be zoomed, text size has to be readable as shipped.
 
 ## Elevation & Depth
 
