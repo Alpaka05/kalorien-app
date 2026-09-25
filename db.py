@@ -67,15 +67,16 @@ CREATE TABLE IF NOT EXISTS sessions (
     last_seen   TEXT NOT NULL
 );
 
--- Verlauf der Tagesziele. Eine Zeile gilt ab valid_from (logischer Tag der
+-- Verlauf der Tagesziele und der Zielrichtung. Eine Zeile gilt ab valid_from (logischer Tag der
 -- Person) bis zur nächsten Zeile. So bewertet eine Zieländerung nur Tage ab
 -- dem Tag der Änderung neu, ältere Tage behalten das Ziel, das damals galt.
--- users.kcal_goal/protein_goal bleiben das aktuelle Ziel.
+-- users.kcal_goal/protein_goal/goal_direction bleiben der aktuelle Stand.
 CREATE TABLE IF NOT EXISTS goal_history (
     user_id       INTEGER NOT NULL,
     valid_from    TEXT NOT NULL,
     kcal_goal     REAL,
     protein_goal  REAL,
+    goal_direction TEXT NOT NULL DEFAULT 'gain',
     created_at    TEXT NOT NULL,
     PRIMARY KEY (user_id, valid_from)
 );
@@ -180,10 +181,22 @@ def init_db() -> None:
         # Konten ohne Zielverlauf: das heute gespeicherte Ziel ist das Einzige,
         # was über früher bekannt ist, also gilt es für den gesamten Altbestand.
         # "0000-01-01" liegt vor jedem echten Tag.
+        if "goal_direction" not in _columns(conn, "goal_history"):
+            # Frühe Fassung des Verlaufs ohne Zielrichtung: die bis dahin
+            # gespeicherte Richtung gilt für alle vorhandenen Zeilen.
+            conn.execute(
+                "ALTER TABLE goal_history "
+                "ADD COLUMN goal_direction TEXT NOT NULL DEFAULT 'gain'"
+            )
+            conn.execute(
+                "UPDATE goal_history SET goal_direction = COALESCE("
+                "(SELECT goal_direction FROM users WHERE users.id = goal_history.user_id), "
+                "'gain')"
+            )
         conn.execute(
             "INSERT INTO goal_history "
-            "(user_id, valid_from, kcal_goal, protein_goal, created_at) "
-            "SELECT id, ?, kcal_goal, protein_goal, created_at FROM users "
+            "(user_id, valid_from, kcal_goal, protein_goal, goal_direction, created_at) "
+            "SELECT id, ?, kcal_goal, protein_goal, goal_direction, created_at FROM users "
             "WHERE id NOT IN (SELECT user_id FROM goal_history)",
             (GOAL_HISTORY_START,),
         )
@@ -210,23 +223,31 @@ def adopt_orphan_entries(conn: sqlite3.Connection, user_id: int) -> int:
 
 
 def goals_by_date(conn: sqlite3.Connection, user_id: int, dates: list[str]) -> dict:
-    """Ziel, das an jedem der Tage galt: {datum: (kcal_goal, protein_goal)}.
+    """Ziel, das an jedem der Tage galt.
 
-    Für Tage vor dem ersten Eintrag im Verlauf gibt es kein Ziel (None, None).
+    Liefert {datum: {"kcal_goal", "protein_goal", "goal_direction"}}. Für Tage
+    vor dem ersten Eintrag im Verlauf gibt es kein Ziel; die Richtung ist dann
+    der Standard "gain".
     """
     if not dates:
         return {}
     rows = conn.execute(
-        "SELECT valid_from, kcal_goal, protein_goal FROM goal_history "
+        "SELECT valid_from, kcal_goal, protein_goal, goal_direction FROM goal_history "
         "WHERE user_id = ? AND valid_from <= ? ORDER BY valid_from ASC",
         (user_id, max(dates)),
     ).fetchall()
     result = {}
     for day in dates:
-        current = (None, None)
+        current = {"kcal_goal": None, "protein_goal": None, "goal_direction": "gain"}
         for row in rows:
             if row["valid_from"] > day:
                 break
-            current = (row["kcal_goal"], row["protein_goal"])
+            current = {
+                "kcal_goal": row["kcal_goal"],
+                "protein_goal": row["protein_goal"],
+                "goal_direction": (
+                    row["goal_direction"] if row["goal_direction"] in ("gain", "lose") else "gain"
+                ),
+            }
         result[day] = current
     return result

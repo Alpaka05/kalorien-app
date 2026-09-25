@@ -618,11 +618,11 @@ function renderSummary() {
     : `Letzte ${state.range} Tage`;
   $('chart-next').disabled = !state.end;
 
-  // Jeder Tag bringt das Ziel mit, das an ihm galt. Eine Zieländerung wirkt
-  // so erst ab dem Tag, an dem sie gemacht wurde, und färbt ältere Balken
-  // nicht nachträglich um.
+  // Jeder Tag bringt Ziel und Zielrichtung mit, die an ihm galten. Eine
+  // Änderung wirkt so erst ab dem Tag, an dem sie gemacht wurde, und färbt
+  // ältere Balken nicht nachträglich um.
   const dayGoal = (day) => day.kcal_goal || 0;
-  const losing = data.goal_direction === 'lose';
+  const dayLosing = (day) => day.goal_direction === 'lose';
   const maxValue = Math.max(...data.series.map((d) => Math.max(d.total, dayGoal(d))), 1);
   // Muss zur CSS-Geometrie passen: .week-chart ist 140px hoch, davon gehen
   // .week-total (12) + 2x gap (10) + .week-label (15) ab. Ist der Wert größer,
@@ -642,14 +642,15 @@ function renderSummary() {
   // Kleinster Abstand, bei dem die Datumsangaben nicht zusammenlaufen.
   const labelEvery = [1, 2, 5].find((n) => n * perColumn >= 20) || 5;
 
-  // Aufeinanderfolgende Tage mit demselben Ziel teilen sich ein Stück der
-  // Ziellinie. Ohne Zieländerung im Zeitraum ist das eine durchgehende Linie.
+  // Aufeinanderfolgende Tage mit demselben Ziel und derselben Richtung teilen
+  // sich ein Stück der Ziellinie. Ohne Änderung im Zeitraum ist das eine
+  // durchgehende Linie.
   const gap = dense ? 2 : 6;
   const segments = [];
   data.series.forEach((day, index) => {
     const last = segments[segments.length - 1];
-    if (last && last.goal === dayGoal(day)) last.to = index;
-    else segments.push({ goal: dayGoal(day), from: index, to: index });
+    if (last && last.goal === dayGoal(day) && last.losing === dayLosing(day)) last.to = index;
+    else segments.push({ goal: dayGoal(day), losing: dayLosing(day), from: index, to: index });
   });
   segments.forEach((segment, index) => {
     if (!segment.goal) return;
@@ -669,7 +670,7 @@ function renderSummary() {
     const width = (segment.to - segment.from + 1) * (perColumn + gap);
     if (index === segments.length - 1 || width >= 70) {
       const tag = document.createElement('span');
-      tag.textContent = (losing ? 'Grenze ' : 'Ziel ') + fmtNum(segment.goal);
+      tag.textContent = (segment.losing ? 'Grenze ' : 'Ziel ') + fmtNum(segment.goal);
       line.appendChild(tag);
     }
     chart.appendChild(line);
@@ -692,7 +693,7 @@ function renderSummary() {
     const bar = document.createElement('div');
     bar.className = 'week-bar';
     const goal = dayGoal(day);
-    if (goal && losing) {
+    if (goal && dayLosing(day)) {
       // Ohne Einträge ist ein Tag nicht "unter der Grenze geblieben", sondern
       // unbekannt – der bliebe sonst grün, obwohl nichts erfasst wurde.
       if (day.entries > 0) bar.classList.add(day.total > goal ? 'over' : 'reached');
