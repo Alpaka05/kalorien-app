@@ -46,7 +46,11 @@
   --shadow-overlay: 0 12px 32px -8px rgba(43, 42, 38, 0.20),
                     0 2px 8px -2px rgba(43, 42, 38, 0.10);
 
-  --ring: 0 0 0 3px var(--accent-bg);
+  /* Verlängert den 1px-Rand des fokussierten Felds nach außen zu einer
+     einzigen, gleichmäßigen 2px-Linie in --accent – so breit wie der
+     Tastaturfokus aller anderen Elemente. Vorher lag ein 3px breiter Schein in
+     --accent-bg um den Rand, das ergab zwei Linien unterschiedlicher Stärke. */
+  --ring: 0 0 0 1px var(--accent);
 
   /* Zustandswechsel sind Rückmeldung, keine Animation – deshalb kurz.
      --dur-slow gehört allein dem Zielbalken. */
@@ -119,6 +123,10 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Nur Scrollen, kein Zoomen per Aufziehen oder Doppeltippen – siehe
+   nozoom.js für den Grund und die übrigen Schichten. */
+html { touch-action: pan-x pan-y; }
 
 body {
   margin: 0;
@@ -520,10 +528,20 @@ a:hover { color: var(--accent); }
   .section-head { flex-wrap: wrap; }
   .section-sub { flex-basis: 100%; }
   .week-label { font-size: 10px; }
-  /* Mindestens 16px: darunter zoomt iOS Safari beim Antippen in die Seite
-     hinein und zoomt danach nicht zurück. Die Höhen bleiben unberührt. */
+}
+
+/* Mindestens 16px: darunter zoomt iOS Safari beim Antippen in die Seite
+   hinein und zoomt danach nicht zurück – die Seite steht dann seitlich über.
+   Das hing früher allein an max-width: 420px und griff deshalb auf großen
+   Handys nicht (iPhone Plus/Pro Max sind 430px breit, im Querformat noch
+   breiter). Maßgeblich ist der Touchscreen, nicht die Breite. Die Höhen
+   bleiben unberührt. */
+@media (max-width: 420px), (pointer: coarse) {
   input[type="text"], input[type="email"], input[type="number"],
   input[type="time"], input[type="date"], select { font-size: 16px; }
+  /* Der Code-Eingabe auf der Login-Seite ihre größere Schrift lassen – die
+     Regel darüber ist spezifischer als .auth-code allein. */
+  input.auth-code { font-size: 20px; }
 }
 
 /* Wer Bewegung abgestellt hat, bekommt dieselben Zustände ohne Übergang –
