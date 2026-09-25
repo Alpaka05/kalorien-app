@@ -154,6 +154,11 @@
       <label class="field-label" for="name-input">Anzeigename (optional)</label>
       <input type="text" id="name-input" maxlength="60" autocomplete="off" />
     </div>
+    <div class="modal-field" id="ai-model-field" hidden>
+      <label class="field-label" for="ai-model-input">KI-Modell</label>
+      <select id="ai-model-input"></select>
+      <p class="modal-hint" id="ai-model-hint">Nur für Admin-Konten sichtbar. Gilt für deine Schätzungen und die Einschätzung; alle anderen Konten nutzen weiter Gemini. Claude wird über deinen Anthropic-Key abgerechnet. Antwortet Claude nicht, springt automatisch Gemini ein.</p>
+    </div>
     <div class="modal-field">
       <label class="field-label" for="theme-input">Farbschema</label>
       <select id="theme-input">

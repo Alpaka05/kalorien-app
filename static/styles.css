@@ -516,6 +516,7 @@ a:hover { color: var(--accent); }
   padding: 2rem 1.25rem; overflow-y: auto; z-index: 20;
 }
 .modal-backdrop[hidden] { display: none; }
+.modal-field[hidden] { display: none; }
 .modal {
   background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-xl);
   padding: 20px; width: 100%; max-width: 420px;
