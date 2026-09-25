@@ -172,7 +172,7 @@ and an amber for caution.
 - **Deep Garden Green** (`#2E5643` light, `#8AC2A4` dark): The stronger sibling. Used
   for primary-button hover, selected chart bars, link text, and "good" notes.
 - **Garden Wash** (`#E7F0EA` light, `#23332B` dark): The faint accent field behind
-  hovered chips and icon buttons, active range toggles, and the 3px focus glow.
+  hovered chips and icon buttons, and active range toggles.
 
 ### Secondary
 
@@ -456,6 +456,9 @@ Three details carry the craft:
 
 - Focus is moved off the column and onto the bar (`:focus-visible .week-bar`), because
   a ring around a full-height column highlights empty space.
+- Hover never recolors: it draws a 1px Ink Muted outline 2px off the bar, so the bar's
+  own color — the answer to "did I make it" — stays readable. The column must also
+  cancel the generic `button:hover` fill, which otherwise paints the whole column.
 - Bars carry `flex-shrink: 0`, without which tall days compress to equal heights.
 - The total and label slots hold a fixed minimum height even when empty, so the
   30-day view — which labels only every fifth day — keeps a common baseline.
