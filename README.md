@@ -30,7 +30,7 @@ von Google AI Studio kostenlos.
 - **Schnellwahl** – deine häufigsten Einträge der letzten 60 Tage (ab zwei
   Mal) als Chips, das Häufigste vorne; ein Tap genügt (ohne neuen API-Aufruf).
   Die Werte kommen vom jüngsten Eintrag, eine Korrektur gilt also auch für den
-  Chip
+  Chip. Lässt sich in den Einstellungen ausblenden
 - **Gewichts-Tracking** mit Trend über 30 Tage
 - **CSV-Export** aller Einträge
 
