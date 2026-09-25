@@ -199,6 +199,15 @@ def goal_direction(user) -> str:
     return value if value in GOAL_DIRECTIONS else "gain"
 
 
+def show_presets(user) -> bool:
+    """Ob die Schnellwahl-Chips angezeigt werden; an, wenn nichts gespeichert ist."""
+    try:
+        value = user["show_presets"]
+    except (KeyError, IndexError, TypeError):
+        return True
+    return value is None or bool(value)
+
+
 def user_today(user) -> str:
     """Tag, dem "jetzt" für diese Person zugerechnet wird."""
     return logical_today(day_start(user))
@@ -407,6 +416,7 @@ def me():
             "protein_goal": user["protein_goal"],
             "day_start_hour": day_start(user),
             "goal_direction": goal_direction(user),
+            "show_presets": show_presets(user),
             "mail_configured": mailer.is_configured(),
         }
     )
@@ -440,6 +450,11 @@ def update_me():
                 return bad("Ziel muss „Zunehmen“ oder „Abnehmen“ sein.")
             fields.append("goal_direction = ?")
             values.append(direction)
+        if "show_presets" in payload:
+            if not isinstance(payload["show_presets"], bool):
+                return bad("show_presets muss true oder false sein.")
+            fields.append("show_presets = ?")
+            values.append(1 if payload["show_presets"] else 0)
         new_start = None
         if "day_start_hour" in payload:
             new_start = int(parse_number(payload["day_start_hour"], "Tagesbeginn", 0, 11))
@@ -463,13 +478,14 @@ def update_me():
 
     row = g.conn.execute(
         "SELECT email, display_name, kcal_goal, protein_goal, day_start_hour, "
-        "       goal_direction "
+        "       goal_direction, show_presets "
         "FROM users WHERE id = ?",
         (g.user["id"],),
     ).fetchone()
     result = dict(row)
     result["day_start_hour"] = int(result["day_start_hour"] or 0)
     result["goal_direction"] = goal_direction(row)
+    result["show_presets"] = show_presets(row)
     result["moved_entries"] = moved if fields else 0
     return jsonify(result)
 
@@ -616,6 +632,61 @@ def add_entry():
         (cur.lastrowid,),
     ).fetchone()
     return jsonify(entry_json(row)), 201
+
+
+# Schnellwahl aus den eigenen Einträgen: was in diesem Zeitraum mindestens so
+# oft vorkam, wird ein Knopf.
+PRESET_DAYS = 60
+PRESET_MIN_COUNT = 2
+PRESET_LIMIT = 20
+
+
+def preset_key(description: str) -> str:
+    """Vergleichsschlüssel: gleiche Beschreibung trotz anderer Schreibweise."""
+    return " ".join(description.split()).casefold()
+
+
+@app.route("/api/presets", methods=["GET"])
+@require_user
+def list_presets():
+    today = user_today(g.user)
+    rows = g.conn.execute(
+        'SELECT entry_date, entry_time, id, "desc", kcal, protein FROM entries '
+        "WHERE user_id = ? AND entry_date BETWEEN ? AND ? "
+        "ORDER BY entry_date DESC, entry_time DESC, id DESC",
+        (g.user["id"], day_offset_iso(PRESET_DAYS - 1, today), today),
+    ).fetchall()
+    # Neueste zuerst: der erste Treffer je Gericht liefert die Werte, damit
+    # eine nachträgliche Korrektur für alle künftigen Tipps gilt.
+    groups: dict[str, dict] = {}
+    for rank, row in enumerate(rows):
+        key = preset_key(row["desc"])
+        if not key:
+            continue
+        group = groups.get(key)
+        if group is None:
+            groups[key] = {
+                "desc": " ".join(row["desc"].split()),
+                "kcal": round(row["kcal"]),
+                "protein": None if row["protein"] is None else round(row["protein"]),
+                "count": 1,
+                "recency": rank,
+            }
+        else:
+            group["count"] += 1
+    presets = sorted(
+        (p for p in groups.values() if p["count"] >= PRESET_MIN_COUNT),
+        key=lambda p: (-p["count"], p["recency"]),
+    )[:PRESET_LIMIT]
+    for preset in presets:
+        del preset["recency"]
+    return jsonify(
+        {
+            "days": PRESET_DAYS,
+            "min_count": PRESET_MIN_COUNT,
+            "presets": presets,
+        }
+    )
 
 
 @app.route("/api/entries/<int:entry_id>", methods=["PATCH"])
