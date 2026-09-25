@@ -167,7 +167,7 @@ and an amber for caution.
 - **Quiet Garden Green** (`#4A7A64` light, `#66A385` dark): Desaturated and domestic,
   a grown thing rather than a brand color — deliberately not a vivid app-accent green.
   It fills primary buttons, fills history bars for days that met the goal, draws the
-  goal-progress fill, and tints focus rings. It is the system's only affirmative
+  goal-progress fill, and draws focus rings. It is the system's only affirmative
   voice.
 - **Deep Garden Green** (`#2E5643` light, `#8AC2A4` dark): The stronger sibling. Used
   for primary-button hover, selected chart bars, link text, and "good" notes.
@@ -321,8 +321,9 @@ else. Cards, panels, chips, and buttons stay flat at rest and always will.
   `--text-primary` rather than pure black, so it stays in the warm family, and carries
   a real offset with a soft blur. The dark-theme variant deepens to 64%/40% black,
   because a warm shadow is invisible on a warm-dark ground.
-- **Focus ring** (`box-shadow: 0 0 0 3px var(--accent-bg)`): Paired with a border shift
-  to `--accent` on focused inputs and selects.
+- **Focus ring** (`box-shadow: 0 0 0 1px var(--accent)`): Paired with a border shift
+  to `--accent` on focused inputs and selects, so border and ring read as one solid
+  2px line — the same weight as the `:focus-visible` outline everywhere else.
 - **Today marker** (`box-shadow: inset 0 0 0 1px var(--accent-dark)`): An inset
   hairline on today's chart bar — deliberately quiet so it doesn't outshout the
   selected bar.
