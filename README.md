@@ -136,7 +136,7 @@ reicht ein zusätzlicher Eintrag in dessen Konfiguration:
 
 ```yaml
 - hostname: kcal.deine-domain.tld
-  service: http://192.168.2.114:5000
+  service: http://<server-ip>:5000
 ```
 
 Wichtig: **kein Schrägstrich am Ende** der `service`-URL, sonst verweigert
@@ -247,3 +247,7 @@ Session-Schlüssel:
 ```bash
 tar czf kalorien-backup-$(date +%F).tar.gz data/
 ```
+
+## Lizenz
+
+MIT – siehe [LICENSE](LICENSE).
