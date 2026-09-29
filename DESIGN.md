@@ -130,8 +130,9 @@ This is bookkeeping of a body without the coldness that usually comes with it.
 Surfaces are warm — a cream paper ground (#FAF8F3), a dark mode tinted brown rather
 than black. Numbers are monospaced and exact. Sans reads, mono counts.
 
-The interface is one 560px column with no navigation and no second place to look. It
-is used one-handed on a phone, seconds after eating. Estimates read as estimates and
+On a phone the interface is one 560px column with no navigation and no second place to
+look. It is used one-handed, seconds after eating. On a desktop the same groups spread
+across the width instead of leaving it empty. Estimates read as estimates and
 stay correctable. The page does not rush, congratulate, or celebrate.
 
 Components should feel warm and tactile: 44px targets, softly rounded surfaces. This
@@ -144,7 +145,8 @@ consumer-app maximalism.
 - Cream-paper ground with white surfaces; a warm-brown dark mode, never pure black (only the opt-in OLED scheme uses a #000000 ground).
 - One accent — a desaturated garden green — carrying every affirmative signal.
 - Monospace for every comparable number; system sans for all prose.
-- A single 560px column, no navigation; settings replace it as a view of their own.
+- A single 560px column on phones and tablets, the same groups in two or three columns
+  on a desktop; no navigation, and settings replace the page as a view of their own.
 - Hairline 1px borders and tonal layering; no shadows, because nothing floats.
 - Motion as response, not animation: one authored moment, everything else under 200ms.
 
@@ -266,10 +268,30 @@ network round trip on the exact interaction that must feel instant.
 
 ## Layout
 
-A single centered column, `max-width: 560px`, with `2rem 1.25rem 4rem` of body
-padding — one destination, no navigation, no sidebar, no tabs. The login page uses a
-narrower 380px column offset `8vh` from the top; the settings view uses the same 560px
-column as the main view.
+Below 960px: a single centered column, `max-width: 560px`, with `2rem 1.25rem 4rem` of
+body padding — one destination, no navigation, no sidebar, no tabs. The login page uses
+a narrower 380px column offset `8vh` from the top; the settings view keeps the 560px
+column at every width, because a form only gets harder to read when its fields grow.
+
+From 960px the main view widens to `max-width: 1600px` with `2.5rem` side padding and
+its content is distributed onto a grid (`.dash`) — the page fills the screen instead of
+sitting in a narrow strip. The markup groups the content in the phone's order, and those
+groups are plain blocks without spacing of their own below 960px, so the phone layout is
+untouched by them:
+
+- **960–1399px, two columns:** input and today's entries on the left, stat cards and
+  coach on the right, history chart and weight across the full width below (chart
+  `2fr`, weight `1fr`).
+- **From 1400px, three columns:** input and entries, cards and coach, chart and weight.
+  The middle column is at least 380px, the width two stat cards need for a four-digit
+  value side by side.
+
+Anything that spans several grid rows reaches into the one `1fr` row, and the browser
+leaves such items out when sizing the `auto` rows. The first row is therefore exactly as
+tall as the input, and every column stacks tight on its own — a long entry list never
+opens a gap under the coach, and a tall coach never pushes the entries down. On the
+desktop the history chart grows from 140px to 200px; `app.js` reads the real height and
+redraws whenever the chart changes size.
 
 Vertical rhythm is built from a small set of repeated gaps rather than a strict
 baseline grid: `8px` between paired controls, `1rem` after a message or chip row,
@@ -277,16 +299,19 @@ baseline grid: `8px` between paired controls, `1rem` after a message or chip row
 chart, coach panel). Horizontal gaps are tighter — `6px` between chips and chart
 columns, `4px` between icon buttons.
 
-The stat cards are the only grid: two equal columns (`1fr 1fr`, 12px gap) collapsing
-to one below 420px. The edit form's three-up field grid (`1fr 1fr 1fr`) collapses to
-two at the same breakpoint. There is exactly one breakpoint in the entire stylesheet.
+The stat cards are a grid of two equal columns (`1fr 1fr`, 12px gap) collapsing to one
+below 420px. The edit form's three-up field grid (`1fr 1fr 1fr`) collapses to two at the
+same breakpoint. There are three breakpoints in the stylesheet: 420px for phones, and
+960px and 1400px for the desktop columns.
 
 ### Named Rules
 
-**The One Column Rule.** Everything lives in one 560px column in a fixed vertical
-order: input, quick chips, stats, coach, today's entries, history chart, weight,
-disclaimer. Never introduce a sidebar, a tab bar, or a second column — the whole
-interface is meant to be thumbed through in one scroll.
+**The One Column Rule.** On phones and tablets everything lives in one 560px column
+in a fixed vertical order: input, quick chips, stats, coach, today's entries, history
+chart, weight, disclaimer. The whole interface is meant to be thumbed through in one
+scroll. The desktop columns redistribute these same groups and keep the order inside
+each group; they never add a sidebar, a tab bar, navigation, or content that exists only
+on the desktop.
 
 **The 16px Zoom Guard.** On touch screens (`pointer: coarse`) and below 420px every
 form field goes to 16px. Anything smaller makes iOS Safari zoom into the page on tap
@@ -402,7 +427,7 @@ border color (`--border` → `--border-strong`) or the surface tone, not the wid
 ### Settings View
 
 - **Style:** Not an overlay but a place you move to. The menu button swaps the whole
-  main view for the settings view in the same 560px column, on the same page ground,
+  main view for the settings view in a 560px column, on the same page ground,
   with no scrim, border, or shadow. It always opens scrolled to the top; going back
   restores the main view's scroll position.
 - **Head:** A back-arrow icon button in front of a 22px display heading
@@ -432,8 +457,8 @@ a muted timestamp against a link-style refresh action.
 
 ### History Chart
 
-Bars are full-height buttons in a flex row (140px tall, 6px gaps), each column
-bottom-aligned so all bars share a baseline. On a gaining account the bar is Hairline
+Bars are full-height buttons in a flex row (140px tall, 200px on the desktop, 6px
+gaps), each column bottom-aligned so all bars share a baseline. On a gaining account the bar is Hairline
 Strong when the day fell short and accent when it reached the goal; on a losing
 account accent means the day stayed under the ceiling and Muted Amber means it went
 over, with days that have no entries left Hairline Strong rather than counted as a
@@ -496,7 +521,8 @@ opening a dialog, so a correction never leaves the list.
   a shadow.
 - **Do** treat `accent-dark` as "stronger than accent", resolving it lighter in dark
   mode.
-- **Do** keep the whole interface in one 560px column in its established order.
+- **Do** keep phones and tablets in one 560px column in its established order, and
+  let the desktop only redistribute the same groups.
 - **Do** draw icons as SVG paths at `1.75` stroke on the 24-unit grid, added through the
   `icon()` helper so a new symbol cannot drift in weight.
 - **Do** theme the surfaces the browser supplies: `::selection`, `caret-color`,
@@ -520,11 +546,13 @@ opening a dialog, so a correction never leaves the list.
   mixed state that was deliberately removed.
 - **Don't** introduce a second accent hue. Amber and brick are reserved for caution
   and destruction; a fourth hue would break the Quiet Accent Rule.
-- **Don't** widen the container past 560px or add a second column, sidebar, or tab bar.
+- **Don't** widen the container past 560px below 960px, and never add a sidebar, a tab
+  bar, or desktop-only content.
 - **Don't** use accent green as a decorative tint on surfaces, headings, or borders
   that carry no affirmative meaning.
-- **Don't** add a second breakpoint casually. The system has one (420px); a new one
-  should be justified by a real layout failure.
+- **Don't** add another breakpoint casually. The system has three (420px for phones,
+  960px and 1400px for the desktop columns); a new one should be justified by a real
+  layout failure.
 - **Don't** use a Unicode glyph or emoji as an icon (`×`, `✎`, `‹`, `›`). They arrive in a
   foreign weight and baseline on every other device. Draw the path instead.
 - **Don't** encode status with color alone, and never with a colored border heavier than
