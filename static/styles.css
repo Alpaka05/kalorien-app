@@ -546,6 +546,77 @@ a:hover { color: var(--accent); }
   input.auth-code { font-size: 20px; }
 }
 
+/* Desktop: dieselben Gruppen wie auf dem Handy, auf Spalten verteilt.
+ *
+ * Unter 960px bleibt alles eine Spalte, die Gruppen (.dash-*) sind dort
+ * gewöhnliche Blöcke ohne Abstände und ändern an der Handy-Ansicht nichts.
+ * Die Reihenfolge im HTML ist die der Handy-Ansicht, deshalb stehen die
+ * Eingabe und die Einträge im Quelltext nicht nebeneinander.
+ *
+ * Die Zeilen sind so gewählt, dass keine Spalte auf eine andere warten muss:
+ * Was mehrere Zeilen überspannt, reicht immer bis in die 1fr-Zeile. Solche
+ * Elemente zählt der Browser bei der Höhe der auto-Zeilen nicht mit, die
+ * erste Zeile ist also genau so hoch wie die Eingabe, und die Einträge
+ * schließen ohne Lücke an – egal wie hoch Kacheln, Einschätzung oder Verlauf
+ * werden.
+ *
+ * Nur die Hauptansicht wird breiter. Die Einstellungen sind ein Formular und
+ * bleiben bei 560px, längere Felder würden dort nur schwerer lesbar.
+ */
+@media (min-width: 960px) {
+  body { padding-left: 2.5rem; padding-right: 2.5rem; }
+  #main-view { max-width: 1600px; }
+
+  /* Zwei Spalten: links Eingabe und Einträge, rechts Kacheln und
+     Einschätzung, darunter über die volle Breite Diagramm und Gewicht. */
+  .dash {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      "input   today"
+      "entries today"
+      "history history";
+    column-gap: 40px;
+    align-items: start;
+  }
+  .dash-input { grid-area: input; }
+  .dash-today { grid-area: today; }
+  .dash-entries { grid-area: entries; }
+  .dash-history {
+    grid-area: history;
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    column-gap: 40px;
+    align-items: start;
+  }
+  /* Neben dem Diagramm ist die Gewichtsspalte so schmal wie ein Handy. Passt
+     der Trend nicht neben die Überschrift, bekommt er wie dort eine eigene
+     Zeile statt zwei gequetschte; bei drei Spalten passt er meist daneben. */
+  .dash-weight .section-head { flex-wrap: wrap; }
+
+  /* Mehr Fläche heißt hier: mehr Auflösung. Die Balkenhöhen rechnet app.js
+     aus der tatsächlichen Höhe. */
+  .week-chart { height: 200px; }
+
+  /* Über die ganze Breite wäre die Zeile zu lang zum Lesen. */
+  .footnote { max-width: 72ch; }
+}
+
+/* Drei Spalten: Eingabe und Einträge, Kacheln und Einschätzung, Verlauf und
+   Gewicht. Die mittlere Spalte braucht mindestens 380px, sonst passen die
+   beiden Kacheln mit einem vierstelligen Wert nicht nebeneinander. */
+@media (min-width: 1400px) {
+  .dash {
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr) minmax(0, 1.2fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "input   today history"
+      "entries today history";
+  }
+  .dash-history { display: block; }
+}
+
 /* Wer Bewegung abgestellt hat, bekommt dieselben Zustände ohne Übergang –
    inklusive des Zielbalkens, der dann sofort auf seinem Wert steht. */
 @media (prefers-reduced-motion: reduce) {

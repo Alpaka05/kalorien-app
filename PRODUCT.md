@@ -112,7 +112,8 @@ surprise the user.
 
 The existing visual character is warm and quiet — a cream-toned light palette and a
 deliberately warm-tinted dark mode rather than pure black, a muted green accent, a
-single narrow column, system sans with monospace reserved for numeric fields.
+single narrow column on the phone (spread over two or three columns on a desktop),
+system sans with monospace reserved for numeric fields.
 
 ## Evidence on Hand
 

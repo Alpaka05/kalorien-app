@@ -574,10 +574,11 @@ function renderSummary() {
   const dayGoal = (day) => day.kcal_goal || 0;
   const dayLosing = (day) => day.goal_direction === 'lose';
   const maxValue = Math.max(...data.series.map((d) => Math.max(d.total, dayGoal(d))), 1);
-  // Muss zur CSS-Geometrie passen: .week-chart ist 140px hoch, davon gehen
-  // .week-total (12) + 2x gap (10) + .week-label (15) ab. Ist der Wert größer,
-  // staucht Flexbox die hohen Balken auf dieselbe Höhe.
-  const chartHeight = 103;
+  // Die Höhe kommt aus dem CSS (.week-chart: 140px, auf dem Desktop 200px),
+  // davon gehen .week-total (12) + 2x gap (10) + .week-label (15) ab. Ist der
+  // Wert größer, staucht Flexbox die hohen Balken auf dieselbe Höhe. 140 gilt,
+  // solange das Diagramm ausgeblendet ist und keine eigene Höhe hat.
+  const chartHeight = (chart.clientHeight || 140) - 37;
   const barBaseline = 20; // Abstand Balkenunterkante zum Diagrammboden
   // Ob Zahlen und Datumsangaben Platz haben, hängt nicht an der Anzahl der
   // Tage, sondern an der Breite pro Spalte: 14 Tage sind auf dem Handy zu eng
@@ -1025,6 +1026,23 @@ function setRange(days) {
     btn.classList.toggle('active', Number(btn.dataset.range) === days);
   });
   loadSummary().catch((err) => setMessage($('error-msg'), err.message));
+}
+
+// Balkenhöhen und ob Zahlen und Datumsangaben über die Balken passen, hängen
+// an der Größe des Diagramms (siehe renderSummary). Die ändert sich mit der
+// Fenstergröße und springt auf dem Desktop zwischen den Spaltenlayouts, also
+// neu zeichnen, sobald sie sich ändert. Breite 0 heißt: Hauptansicht
+// ausgeblendet. Ohne ResizeObserver (sehr alte Browser) bleibt es beim
+// Zeichnen nach dem Laden – ein Fehler hier würde die ganze App anhalten.
+let chartSize = '';
+if ('ResizeObserver' in window) {
+  new ResizeObserver(([entry]) => {
+    const { width, height } = entry.contentRect;
+    const size = Math.round(width) + 'x' + Math.round(height);
+    if (!width || size === chartSize) return;
+    chartSize = size;
+    if (state.summary) renderSummary();
+  }).observe($('week-chart'));
 }
 
 $('add-btn').addEventListener('click', handleAdd);

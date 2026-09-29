@@ -35,81 +35,98 @@
     </div>
   </div>
 
-  <div class="input-row">
-    <input type="text" id="food-input" placeholder="z. B. 2 Scheiben Toast mit Butter" autocomplete="off" />
-    <button id="add-btn">Hinzufügen</button>
-  </div>
-  <div class="chips" id="presets"></div>
-  <p class="message error" id="error-msg"></p>
+  <!-- Die vier Gruppen stehen in der Reihenfolge der Handy-Ansicht und sind
+       dort gewöhnliche Blöcke ohne eigene Abstände. Erst ab 960px verteilt sie
+       .dash auf Spalten, siehe styles.css. -->
+  <div class="dash">
+    <div class="dash-input">
+      <div class="input-row">
+        <input type="text" id="food-input" placeholder="z. B. 2 Scheiben Toast mit Butter" autocomplete="off" />
+        <button id="add-btn">Hinzufügen</button>
+      </div>
+      <div class="chips" id="presets"></div>
+      <p class="message error" id="error-msg"></p>
+    </div>
 
-  <div class="cards">
-    <div class="card">
-      <p class="card-label">Heute<span id="today-hint"></span></p>
-      <p class="card-value" id="today-total">0 kcal</p>
-      <div class="goal-bar" id="today-bar" hidden><span style="width:0%"></span></div>
-      <p class="card-note" id="today-note"></p>
-    </div>
-    <div class="card">
-      <p class="card-label" id="avg-label">Ø letzte 7 Tage</p>
-      <p class="card-value" id="week-avg">0 kcal</p>
-      <p class="card-note" id="protein-note"></p>
-    </div>
-  </div>
+    <div class="dash-today">
+      <div class="cards">
+        <div class="card">
+          <p class="card-label">Heute<span id="today-hint"></span></p>
+          <p class="card-value" id="today-total">0 kcal</p>
+          <div class="goal-bar" id="today-bar" hidden><span style="width:0%"></span></div>
+          <p class="card-note" id="today-note"></p>
+        </div>
+        <div class="card">
+          <p class="card-label" id="avg-label">Ø letzte 7 Tage</p>
+          <p class="card-value" id="week-avg">0 kcal</p>
+          <p class="card-note" id="protein-note"></p>
+        </div>
+      </div>
 
-  <div class="coach" id="coach" hidden>
-    <div class="coach-head">
-      <span class="coach-icon" id="coach-icon" aria-hidden="true"></span>
-      <p class="coach-headline" id="coach-headline"></p>
+      <div class="coach" id="coach" hidden>
+        <div class="coach-head">
+          <span class="coach-icon" id="coach-icon" aria-hidden="true"></span>
+          <p class="coach-headline" id="coach-headline"></p>
+        </div>
+        <p class="coach-message" id="coach-message"></p>
+        <ul class="coach-tips" id="coach-tips" hidden></ul>
+        <div class="coach-foot">
+          <span class="coach-stamp" id="coach-stamp"></span>
+          <button class="link" id="coach-refresh">Neu einschätzen</button>
+        </div>
+      </div>
     </div>
-    <p class="coach-message" id="coach-message"></p>
-    <ul class="coach-tips" id="coach-tips" hidden></ul>
-    <div class="coach-foot">
-      <span class="coach-stamp" id="coach-stamp"></span>
-      <button class="link" id="coach-refresh">Neu einschätzen</button>
-    </div>
-  </div>
 
-  <div class="section-head">
-    <p class="section-title">Heutige Einträge</p>
-  </div>
-  <div class="entry-list" id="today-list"></div>
+    <div class="dash-entries">
+      <div class="section-head">
+        <p class="section-title">Heutige Einträge</p>
+      </div>
+      <div class="entry-list" id="today-list"></div>
+    </div>
 
-  <div class="section-head">
-    <p class="section-title" id="chart-title">Letzte 7 Tage</p>
-    <div class="chart-nav">
-      <button class="ghost small" data-range="7">7</button>
-      <button class="ghost small" data-range="14">14</button>
-      <button class="ghost small" data-range="30">30</button>
-      <button class="icon-btn" id="chart-prev" title="Früherer Zeitraum" aria-label="Früherer Zeitraum"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <button class="icon-btn" id="chart-next" title="Späterer Zeitraum" aria-label="Späterer Zeitraum"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+    <div class="dash-history">
+      <div class="dash-chart">
+        <div class="section-head">
+          <p class="section-title" id="chart-title">Letzte 7 Tage</p>
+          <div class="chart-nav">
+            <button class="ghost small" data-range="7">7</button>
+            <button class="ghost small" data-range="14">14</button>
+            <button class="ghost small" data-range="30">30</button>
+            <button class="icon-btn" id="chart-prev" title="Früherer Zeitraum" aria-label="Früherer Zeitraum"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+            <button class="icon-btn" id="chart-next" title="Späterer Zeitraum" aria-label="Späterer Zeitraum"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+          </div>
+        </div>
+        <div class="week-chart" id="week-chart"></div>
+        <div class="chart-foot">
+          <p class="chart-scale-note" id="chart-note">Tippe auf einen Balken, um den Tag zu sehen.</p>
+          <span class="chart-goal" id="chart-goal" hidden></span>
+        </div>
+        <div class="day-detail" id="day-detail" hidden>
+          <div class="day-detail-head">
+            <p class="day-detail-date" id="day-detail-date"></p>
+            <span class="day-detail-total" id="day-detail-total"></span>
+          </div>
+          <div class="day-detail-list" id="day-detail-list"></div>
+        </div>
+      </div>
+
+      <div class="dash-weight">
+        <div class="section-head">
+          <p class="section-title">Gewicht</p>
+          <p class="section-sub" id="weight-trend"></p>
+        </div>
+        <div class="weight-row">
+          <!-- Absichtlich type="text": bei type="number" verwirft Safari eine Eingabe
+               mit Komma ("68,5") intern, das Feld zeigt sie noch, der Wert ist aber
+               leer. inputmode sorgt weiterhin für die Zifferntastatur. -->
+          <input type="text" id="weight-input" placeholder="z. B. 68,5" inputmode="decimal"
+                 autocomplete="off" maxlength="6" />
+          <button id="weight-btn" class="ghost">Eintragen</button>
+        </div>
+        <p class="message" id="weight-msg"></p>
+      </div>
     </div>
   </div>
-  <div class="week-chart" id="week-chart"></div>
-  <div class="chart-foot">
-    <p class="chart-scale-note" id="chart-note">Tippe auf einen Balken, um den Tag zu sehen.</p>
-    <span class="chart-goal" id="chart-goal" hidden></span>
-  </div>
-  <div class="day-detail" id="day-detail" hidden>
-    <div class="day-detail-head">
-      <p class="day-detail-date" id="day-detail-date"></p>
-      <span class="day-detail-total" id="day-detail-total"></span>
-    </div>
-    <div class="day-detail-list" id="day-detail-list"></div>
-  </div>
-
-  <div class="section-head">
-    <p class="section-title">Gewicht</p>
-    <p class="section-sub" id="weight-trend"></p>
-  </div>
-  <div class="weight-row">
-    <!-- Absichtlich type="text": bei type="number" verwirft Safari eine Eingabe
-         mit Komma ("68,5") intern, das Feld zeigt sie noch, der Wert ist aber
-         leer. inputmode sorgt weiterhin für die Zifferntastatur. -->
-    <input type="text" id="weight-input" placeholder="z. B. 68,5" inputmode="decimal"
-           autocomplete="off" maxlength="6" />
-    <button id="weight-btn" class="ghost">Eintragen</button>
-  </div>
-  <p class="message" id="weight-msg"></p>
 
   <p class="footnote">Kalorienangaben sind Schätzungen auf Basis üblicher Portionsgrößen, keine exakte Nährwertanalyse. Deine Daten liegen auf deinem eigenen Server und sind nur mit deinem Konto sichtbar.</p>
 </div>
