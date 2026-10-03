@@ -26,7 +26,10 @@ von Google AI Studio kostenlos.
 - **KI-Einschätzung** – bewertet die letzten 14 Tage gegenüber dem Ziel und sagt,
   wo du nachgelassen hast
 - **Verlauf** – 7, 14 oder 30 Tage, beliebig weiter zurückblätterbar; ein Klick
-  auf einen Balken zeigt, was an dem Tag wann gegessen wurde
+  auf einen Balken zeigt, was an dem Tag wann gegessen wurde. Ein Umschalter
+  wechselt zwischen **Kalorien**, **Eiweiß** (gegen das Eiweißziel) und
+  **Gewicht** (als Linie); Zeitraum und gewählter Tag bleiben dabei stehen,
+  die Wahl merkt sich das Gerät
 - **Schnellwahl** – deine häufigsten Einträge der letzten 60 Tage (ab zwei
   Mal) als Chips, das Häufigste vorne; ein Tap genügt (ohne neuen API-Aufruf).
   Die Werte kommen vom jüngsten Eintrag, eine Korrektur gilt also auch für den

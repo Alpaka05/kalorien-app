@@ -827,6 +827,16 @@ def summary():
     ).fetchall()
     by_date = {r["entry_date"]: r for r in rows}
     goals = db.goals_by_date(g.conn, g.user["id"], dates)
+    # Gewicht für das Gewichtsdiagramm im selben Zeitraum – ein Wert pro Tag,
+    # Tage ohne Messung bleiben None statt 0.
+    weights = {
+        r["weigh_date"]: r["kg"]
+        for r in g.conn.execute(
+            "SELECT weigh_date, kg FROM weights "
+            "WHERE user_id = ? AND weigh_date BETWEEN ? AND ?",
+            (g.user["id"], dates[0], dates[-1]),
+        )
+    }
 
     result = []
     for date_iso in dates:
@@ -838,6 +848,7 @@ def summary():
                 "total": round(row["total"], 1) if row else 0.0,
                 "protein": round(row["protein"], 1) if row else 0.0,
                 "entries": row["entries"] if row else 0,
+                "kg": weights.get(date_iso),
                 # Ziel und Richtung, die an diesem Tag galten – nicht die heutigen.
                 "kcal_goal": goal["kcal_goal"],
                 "protein_goal": goal["protein_goal"],

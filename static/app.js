@@ -4,6 +4,15 @@ const fmtKcal = (n) => Math.round(n).toLocaleString('de-DE') + ' kcal';
 const fmtNum = (n) => Math.round(n).toLocaleString('de-DE');
 const weekdayShort = (iso) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('de-DE', { weekday: 'short' });
+// Gewicht immer mit einer Nachkommastelle, damit 68 und 68,5 untereinander
+// gleich breit sind.
+const fmtKg = (kg) =>
+  kg.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+// Veränderung mit Vorzeichen; echtes Minus statt Bindestrich.
+const fmtKgDelta = (delta) => {
+  const rounded = Math.round(delta * 10) / 10;
+  return (rounded > 0 ? '+' : rounded < 0 ? '−' : '±') + fmtKg(Math.abs(rounded));
+};
 const dateLong = (iso) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('de-DE', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -79,12 +88,14 @@ function setCoachIcon(name) {
 const state = {
   me: null,
   range: 7,
+  metric: 'kcal',     // Was das Diagramm zeigt: kcal, protein oder weight
   end: null,          // Enddatum des angezeigten Zeitraums (null = heute)
   today: null,
   summary: null,
   selectedDay: null,
   editingId: null,
   presets: null,      // Schnellwahl aus /api/presets
+  weights: null,      // Messungen aus /api/weights, neueste zuerst
 };
 
 // --------------------------------------------------------------------------
@@ -555,7 +566,9 @@ function renderSummary() {
   const data = state.summary;
   const chart = $('week-chart');
   chart.textContent = '';
+  chart.classList.toggle('weight', state.metric === 'weight');
 
+  // Die Kachel zeigt immer die Kalorien, egal welches Diagramm gewählt ist.
   const logged = data.series.filter((d) => d.entries > 0);
   const average = logged.length
     ? logged.reduce((sum, d) => sum + d.total, 0) / logged.length
@@ -568,17 +581,12 @@ function renderSummary() {
     : `Letzte ${state.range} Tage`;
   $('chart-next').disabled = !state.end;
 
-  // Jeder Tag bringt Ziel und Zielrichtung mit, die an ihm galten. Eine
-  // Änderung wirkt so erst ab dem Tag, an dem sie gemacht wurde, und färbt
-  // ältere Balken nicht nachträglich um.
-  const dayGoal = (day) => day.kcal_goal || 0;
-  const dayLosing = (day) => day.goal_direction === 'lose';
-  const maxValue = Math.max(...data.series.map((d) => Math.max(d.total, dayGoal(d))), 1);
   // Die Höhe kommt aus dem CSS (.week-chart: 140px, auf dem Desktop 200px),
   // davon gehen .week-total (12) + 2x gap (10) + .week-label (15) ab. Ist der
   // Wert größer, staucht Flexbox die hohen Balken auf dieselbe Höhe. 140 gilt,
   // solange das Diagramm ausgeblendet ist und keine eigene Höhe hat.
-  const chartHeight = (chart.clientHeight || 140) - 37;
+  const fullHeight = chart.clientHeight || 140;
+  const chartHeight = fullHeight - 37;
   const barBaseline = 20; // Abstand Balkenunterkante zum Diagrammboden
   // Ob Zahlen und Datumsangaben Platz haben, hängt nicht an der Anzahl der
   // Tage, sondern an der Breite pro Spalte: 14 Tage sind auf dem Handy zu eng
@@ -588,15 +596,54 @@ function renderSummary() {
   const chartWidth = chart.getBoundingClientRect().width || 335;
   const widthPerColumn = (gap) => (chartWidth - (columns - 1) * gap) / columns;
   const dense = widthPerColumn(6) < 28; // Platz für die Zahl über dem Balken?
-  chart.style.gap = dense ? '2px' : '6px';
-  const perColumn = widthPerColumn(dense ? 2 : 6);
+  const gap = dense ? 2 : 6;
+  chart.style.gap = gap + 'px';
+  const perColumn = widthPerColumn(gap);
   // Kleinster Abstand, bei dem die Datumsangaben nicht zusammenlaufen.
   const labelEvery = [1, 2, 5].find((n) => n * perColumn >= 20) || 5;
+
+  const geo = {
+    chart, fullHeight, chartHeight, barBaseline, chartWidth, dense, gap, perColumn,
+    // Tagesbeschriftung unter der Spalte, für Balken und Punkte gleich.
+    label(day, index) {
+      const label = document.createElement('span');
+      label.className = 'week-label' + (day.date === data.today ? ' today' : '');
+      const fromEnd = data.series.length - 1 - index;
+      if (fromEnd % labelEvery === 0) {
+        label.textContent = dense
+          ? new Date(day.date + 'T00:00:00').getDate()
+          : weekdayShort(day.date);
+      }
+      return label;
+    },
+  };
+
+  if (state.metric === 'weight') renderWeightChart(data, geo);
+  else renderBarChart(data, geo, state.metric === 'protein');
+
+  if (state.selectedDay) renderDayDetail();
+}
+
+// Kalorien und Eiweiß: dieselben Balken, nur Wert, Ziel und Einheit wechseln.
+function renderBarChart(data, geo, protein) {
+  const { chart, chartHeight, barBaseline, dense, gap, perColumn } = geo;
+
+  // Jeder Tag bringt Ziel und Zielrichtung mit, die an ihm galten. Eine
+  // Änderung wirkt so erst ab dem Tag, an dem sie gemacht wurde, und färbt
+  // ältere Balken nicht nachträglich um.
+  const value = (day) => (protein ? day.protein : day.total);
+  const dayGoal = (day) => (protein ? day.protein_goal : day.kcal_goal) || 0;
+  // Das Eiweißziel ist immer eine Untergrenze, auch auf einem Konto, das
+  // abnehmen will – die Zielrichtung gilt nur für die Kalorien.
+  const dayLosing = (day) => !protein && day.goal_direction === 'lose';
+  const goalText = (segment) => protein
+    ? `Ziel ${fmtNum(segment.goal)} g`
+    : (segment.losing ? 'Grenze ' : 'Ziel ') + fmtNum(segment.goal);
+  const maxValue = Math.max(...data.series.map((d) => Math.max(value(d), dayGoal(d))), 1);
 
   // Aufeinanderfolgende Tage mit demselben Ziel und derselben Richtung teilen
   // sich ein Stück der Ziellinie. Ohne Änderung im Zeitraum ist das eine
   // durchgehende Linie.
-  const gap = dense ? 2 : 6;
   const segments = [];
   data.series.forEach((day, index) => {
     const last = segments[segments.length - 1];
@@ -605,10 +652,15 @@ function renderSummary() {
   });
   const current = segments[segments.length - 1];
   const legend = $('chart-goal');
-  legend.hidden = !(current && current.goal);
-  legend.textContent = legend.hidden
-    ? ''
-    : (current.losing ? 'Grenze ' : 'Ziel ') + fmtNum(current.goal);
+  if (current && current.goal) {
+    legend.hidden = false;
+    legend.textContent = goalText(current);
+  } else {
+    // Ohne Eiweißziel sagt die Legende, warum kein Balken grün wird. Bei den
+    // Kalorien gibt es immer ein Ziel, bis auf ganz neue Konten.
+    legend.hidden = !protein;
+    legend.textContent = protein ? 'kein Eiweißziel' : '';
+  }
 
   segments.forEach((segment, index) => {
     if (!segment.goal) return;
@@ -629,25 +681,24 @@ function renderSummary() {
     const width = (segment.to - segment.from + 1) * (perColumn + gap);
     if (index < segments.length - 1 && width >= 70) {
       const tag = document.createElement('span');
-      tag.textContent = (segment.losing ? 'Grenze ' : 'Ziel ') + fmtNum(segment.goal);
+      tag.textContent = goalText(segment);
       line.appendChild(tag);
     }
     chart.appendChild(line);
   });
 
   data.series.forEach((day, index) => {
-    const isToday = day.date === data.today;
-    const fromEnd = data.series.length - 1 - index;
-    const showLabel = fromEnd % labelEvery === 0;
+    const amount = value(day);
     const col = document.createElement('button');
     col.type = 'button';
     col.className = 'week-col' + (state.selectedDay === day.date ? ' selected' : '');
-    col.title = `${dateLong(day.date)}: ${fmtKcal(day.total)}`;
+    col.title = `${dateLong(day.date)}: ` +
+      (protein ? `${fmtNum(amount)} g Eiweiß` : fmtKcal(amount));
     col.setAttribute('aria-label', col.title);
 
     const total = document.createElement('span');
     total.className = 'week-total';
-    total.textContent = !dense && day.total ? fmtNum(day.total) : '';
+    total.textContent = !dense && amount ? fmtNum(amount) : '';
 
     const bar = document.createElement('div');
     bar.className = 'week-bar';
@@ -655,31 +706,120 @@ function renderSummary() {
     if (goal && dayLosing(day)) {
       // Ohne Einträge ist ein Tag nicht "unter der Grenze geblieben", sondern
       // unbekannt – der bliebe sonst grün, obwohl nichts erfasst wurde.
-      if (day.entries > 0) bar.classList.add(day.total > goal ? 'over' : 'reached');
-    } else if (goal && day.total >= goal) {
+      if (day.entries > 0) bar.classList.add(amount > goal ? 'over' : 'reached');
+    } else if (goal && amount >= goal) {
       bar.classList.add('reached');
     }
-    bar.style.height = Math.max(4, Math.round((day.total / maxValue) * chartHeight)) + 'px';
+    bar.style.height = Math.max(4, Math.round((amount / maxValue) * chartHeight)) + 'px';
 
-    const label = document.createElement('span');
-    label.className = 'week-label' + (isToday ? ' today' : '');
-    if (showLabel) {
-      label.textContent = dense
-        ? new Date(day.date + 'T00:00:00').getDate()
-        : weekdayShort(day.date);
-    }
-
-    col.append(total, bar, label);
+    col.append(total, bar, geo.label(day, index));
     col.addEventListener('click', () => selectDay(day.date));
     chart.appendChild(col);
   });
 
-  const emptyDays = data.series.length - logged.length;
+  const emptyDays = data.series.length - data.series.filter((d) => d.entries > 0).length;
   $('chart-note').textContent = emptyDays
     ? `Tippe auf einen Balken für die Details. ${emptyDays} Tag${emptyDays === 1 ? '' : 'e'} ohne Einträge.`
     : 'Tippe auf einen Balken, um den Tag zu sehen.';
+}
 
-  if (state.selectedDay) renderDayDetail();
+// Gewicht: eine Linie durch die Messungen, ein Punkt pro gewogenem Tag. Kein
+// Ziel, also auch kein Grün – die Farbe bleibt dem erreichten Ziel vorbehalten.
+function renderWeightChart(data, geo) {
+  const { chart, fullHeight, chartHeight, barBaseline, chartWidth, dense, gap, perColumn } = geo;
+  const measured = data.series.filter((d) => d.kg != null);
+
+  // Die Skala beginnt nicht bei null (dann wäre jede Linie flach), umfasst
+  // aber mindestens 2 kg: sonst sähe eine Schwankung um 100 g aus wie ein
+  // Absturz. Die Grenzen liegen auf halben Kilogramm.
+  let lo = 0;
+  let hi = 2;
+  if (measured.length) {
+    const values = measured.map((d) => d.kg);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(2, Math.ceil((max - min + 0.4) * 2) / 2);
+    lo = Math.floor(((min + max) / 2 - span / 2) * 2) / 2;
+    hi = Math.max(lo + span, Math.ceil((max + 0.2) * 2) / 2);
+  }
+  const offset = (kg) => barBaseline + ((kg - lo) / (hi - lo)) * chartHeight;
+
+  // Hilfslinien bei ganzen Kilogramm, bei großer Spanne bei jedem zweiten.
+  const step = hi - lo > 6 ? 2 : 1;
+  if (measured.length) {
+    for (let kg = Math.ceil(lo / step) * step; kg <= hi; kg += step) {
+      const line = document.createElement('div');
+      line.className = 'weight-grid';
+      line.style.bottom = offset(kg) + 'px';
+      const tag = document.createElement('span');
+      tag.textContent = `${kg} kg`;
+      line.appendChild(tag);
+      chart.appendChild(line);
+    }
+  }
+
+  if (measured.length > 1) {
+    const x = (index) => index * (perColumn + gap) + perColumn / 2;
+    const points = [];
+    data.series.forEach((day, index) => {
+      if (day.kg == null) return;
+      const y = fullHeight - offset(day.kg);
+      points.push(`${points.length ? 'L' : 'M'}${x(index).toFixed(1)} ${y.toFixed(1)}`);
+    });
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'weight-line');
+    svg.setAttribute('width', String(chartWidth));
+    svg.setAttribute('height', String(fullHeight));
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', points.join(' '));
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-width', '1.75');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+    chart.appendChild(svg);
+  }
+
+  const lastMeasured = measured.length ? measured[measured.length - 1].date : null;
+  data.series.forEach((day, index) => {
+    const selected = state.selectedDay === day.date;
+    const col = document.createElement('button');
+    col.type = 'button';
+    col.className = 'week-col' + (selected ? ' selected' : '') + (day.kg == null ? ' no-dot' : '');
+    col.title = `${dateLong(day.date)}: ` +
+      (day.kg == null ? 'kein Gewicht eingetragen' : `${fmtKg(day.kg)} kg`);
+    col.setAttribute('aria-label', col.title);
+
+    if (day.kg != null) {
+      const bottom = offset(day.kg);
+      const dot = document.createElement('span');
+      dot.className = 'weight-dot';
+      dot.style.bottom = bottom + 'px';
+      // Bei engen Spalten liefen die Zahlen ineinander: dann nur die letzte
+      // Messung und der ausgewählte Tag.
+      const text = document.createElement('span');
+      text.className = 'weight-value';
+      text.style.bottom = bottom + 8 + 'px';
+      text.textContent = !dense || selected || day.date === lastMeasured ? fmtKg(day.kg) : '';
+      col.append(dot, text);
+    }
+    col.append(geo.label(day, index));
+    col.addEventListener('click', () => selectDay(day.date));
+    chart.appendChild(col);
+  });
+
+  const missing = data.series.length - measured.length;
+  $('chart-note').textContent = !measured.length
+    ? 'In diesem Zeitraum wurde kein Gewicht eingetragen.'
+    : 'Tippe auf einen Tag für den Wert.' +
+      (missing ? ` ${missing} Tag${missing === 1 ? '' : 'e'} ohne Messung.` : '');
+  const legend = $('chart-goal');
+  legend.hidden = measured.length < 2;
+  legend.textContent = legend.hidden
+    ? ''
+    : `${fmtKgDelta(measured[measured.length - 1].kg - measured[0].kg)} kg im Zeitraum`;
 }
 
 async function selectDay(date) {
@@ -703,6 +843,10 @@ async function renderDayDetail(reload = false) {
   const wanted = state.selectedDay;
   box.hidden = false;
   $('day-detail-date').textContent = dateLong(wanted);
+  if (state.metric === 'weight') {
+    renderWeightDetail(wanted);
+    return;
+  }
   if (reload || !state.dayCache || state.dayCache.date !== wanted) {
     $('day-detail-list').textContent = 'Lade…';
     let loaded;
@@ -717,28 +861,63 @@ async function renderDayDetail(reload = false) {
     if (state.selectedDay !== wanted) return;
     state.dayCache = loaded;
   }
+  // Dieselbe Liste für Kalorien und Eiweiß, nur die rechte Spalte wechselt.
+  const protein = state.metric === 'protein';
   const entries = state.dayCache.entries;
-  const total = entries.reduce((sum, e) => sum + e.kcal, 0);
-  $('day-detail-total').textContent = fmtKcal(total);
+  const total = entries.reduce((sum, e) => sum + ((protein ? e.protein : e.kcal) || 0), 0);
+  $('day-detail-total').textContent = protein ? `${fmtNum(total)} g Eiweiß` : fmtKcal(total);
   const list = $('day-detail-list');
   list.textContent = '';
   if (!entries.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-state';
-    empty.textContent = 'An diesem Tag wurde nichts eingetragen.';
-    list.appendChild(empty);
+    list.appendChild(detailEmpty('An diesem Tag wurde nichts eingetragen.'));
     return;
   }
   entries.forEach((entry) => {
-    const row = document.createElement('div');
-    row.className = 'day-detail-item';
-    const left = document.createElement('span');
-    left.textContent = `${entry.time} · ${entry.desc}`;
-    const right = document.createElement('span');
-    right.textContent = fmtNum(entry.kcal) + ' kcal';
-    row.append(left, right);
-    list.appendChild(row);
+    let right = fmtNum(entry.kcal) + ' kcal';
+    if (protein) right = entry.protein == null ? '–' : fmtNum(entry.protein) + ' g';
+    list.appendChild(detailRow(`${entry.time} · ${entry.desc}`, right));
   });
+}
+
+// Gewicht braucht keine Anfrage: der Wert steht schon in der Zusammenfassung,
+// die vorige Messung in der Gewichtsliste – auch wenn sie vor dem Zeitraum liegt.
+function renderWeightDetail(date) {
+  const day = state.summary && state.summary.series.find((d) => d.date === date);
+  const kg = day ? day.kg : null;
+  $('day-detail-total').textContent = kg == null ? '' : `${fmtKg(kg)} kg`;
+  const list = $('day-detail-list');
+  list.textContent = '';
+  if (kg == null) {
+    list.appendChild(detailEmpty('An diesem Tag wurde kein Gewicht eingetragen.'));
+    return;
+  }
+  const previous = (state.weights || []).find((w) => w.date < date);
+  if (!previous) {
+    list.appendChild(detailEmpty('Deine erste Messung.'));
+    return;
+  }
+  list.append(
+    detailRow(`Vorige Messung · ${dateLong(previous.date)}`, `${fmtKg(previous.kg)} kg`),
+    detailRow('Veränderung', `${fmtKgDelta(kg - previous.kg)} kg`)
+  );
+}
+
+function detailRow(leftText, rightText) {
+  const row = document.createElement('div');
+  row.className = 'day-detail-item';
+  const left = document.createElement('span');
+  left.textContent = leftText;
+  const right = document.createElement('span');
+  right.textContent = rightText;
+  row.append(left, right);
+  return row;
+}
+
+function detailEmpty(text) {
+  const empty = document.createElement('div');
+  empty.className = 'empty-state';
+  empty.textContent = text;
+  return empty;
 }
 
 function shiftRange(direction) {
@@ -757,6 +936,7 @@ function shiftRange(direction) {
 
 async function loadWeights() {
   const data = await api('/api/weights');
+  state.weights = data.entries;
   const trend = $('weight-trend');
   if (!data.latest) {
     trend.textContent = 'Noch kein Gewicht erfasst';
@@ -785,7 +965,8 @@ async function saveWeight() {
     await api('/api/weights', { method: 'POST', body: JSON.stringify({ kg: value }) });
     input.value = '';
     setMessage($('weight-msg'), 'Gewicht gespeichert.', 'ok');
-    await loadWeights();
+    // Die Zusammenfassung trägt das Gewicht pro Tag für das Diagramm.
+    await Promise.all([loadWeights(), loadSummary()]);
     loadCoach();
   } catch (err) {
     setMessage($('weight-msg'), err.message);
@@ -1028,6 +1209,35 @@ function setRange(days) {
   loadSummary().catch((err) => setMessage($('error-msg'), err.message));
 }
 
+// Die Wahl gehört zum Gerät, nicht zum Konto – wie das Farbschema. Kann
+// localStorage nicht gelesen werden, startet das Diagramm bei den Kalorien.
+const METRIC_KEY = 'kcal-chart-metric';
+const METRICS = ['kcal', 'protein', 'weight'];
+
+function storedMetric() {
+  try {
+    const value = localStorage.getItem(METRIC_KEY);
+    return METRICS.includes(value) ? value : 'kcal';
+  } catch (err) {
+    return 'kcal';
+  }
+}
+
+// Zeitraum und ausgewählter Tag bleiben stehen: so lässt sich derselbe Tag
+// in allen drei Diagrammen ansehen. Die Daten sind schon geladen.
+function setMetric(metric) {
+  state.metric = metric;
+  try {
+    localStorage.setItem(METRIC_KEY, metric);
+  } catch (err) {
+    /* ignorieren */
+  }
+  document.querySelectorAll('[data-metric]').forEach((btn) => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.metric === metric));
+  });
+  if (state.summary) renderSummary();
+}
+
 // Balkenhöhen und ob Zahlen und Datumsangaben über die Balken passen, hängen
 // an der Größe des Diagramms (siehe renderSummary). Die ändert sich mit der
 // Fenstergröße und springt auf dem Desktop zwischen den Spaltenlayouts, also
@@ -1058,6 +1268,9 @@ $('chart-prev').addEventListener('click', () => shiftRange(-1));
 $('chart-next').addEventListener('click', () => shiftRange(1));
 document.querySelectorAll('[data-range]').forEach((btn) => {
   btn.addEventListener('click', () => setRange(Number(btn.dataset.range)));
+});
+document.querySelectorAll('[data-metric]').forEach((btn) => {
+  btn.addEventListener('click', () => setMetric(btn.dataset.metric));
 });
 $('settings-btn').addEventListener('click', openSettings);
 $('settings-back').addEventListener('click', closeSettings);
@@ -1093,6 +1306,7 @@ $('logout-btn').addEventListener('click', async () => {
       showSettingsView(true);
     }
     document.querySelector('[data-range="7"]').classList.add('active');
+    setMetric(storedMetric());
     await refreshAll();
   } catch (err) {
     setMessage($('error-msg'), err.message);

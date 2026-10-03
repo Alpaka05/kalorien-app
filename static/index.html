@@ -86,6 +86,13 @@
 
     <div class="dash-history">
       <div class="dash-chart">
+        <!-- Wählt, was das Diagramm zeigt. Zeitraum und ausgewählter Tag
+             bleiben beim Wechsel stehen. -->
+        <div class="metric-switch" role="group" aria-label="Was das Diagramm zeigt">
+          <button type="button" data-metric="kcal" aria-pressed="true">Kalorien</button>
+          <button type="button" data-metric="protein" aria-pressed="false">Eiweiß</button>
+          <button type="button" data-metric="weight" aria-pressed="false">Gewicht</button>
+        </div>
         <div class="section-head">
           <p class="section-title" id="chart-title">Letzte 7 Tage</p>
           <div class="chart-nav">
