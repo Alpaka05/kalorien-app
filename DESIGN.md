@@ -285,12 +285,20 @@ untouched by them:
 - **From 1400px, three columns:** input and entries, cards and coach, chart and weight.
   The middle column is at least 380px, the width two stat cards need for a four-digit
   value side by side.
+- **From 1800px, larger:** on a 27-inch screen at 2560px the 1600px page sat in the
+  middle of a much wider field with phone-sized type. From 1800px both views get CSS
+  `zoom: 1.15` and the main view's cap rises to 2000px (2300px on screen), so the page
+  fills the width and everything grows together. Zoom instead of per-element sizes,
+  because every measure is tuned in px for the narrow column; `app.js` measures the
+  chart with `clientWidth`/`clientHeight`, which ignore the zoom, so the bars are not
+  scaled twice.
 
 Anything that spans several grid rows reaches into the one `1fr` row, and the browser
 leaves such items out when sizing the `auto` rows. The first row is therefore exactly as
 tall as the input, and every column stacks tight on its own — a long entry list never
 opens a gap under the coach, and a tall coach never pushes the entries down. On the
-desktop the history chart grows from 140px to 200px; `app.js` reads the real height and
+desktop the history chart grows from 140px to 200px, and to 240px in the three-column
+layout; `app.js` reads the real height and
 redraws whenever the chart changes size.
 
 Vertical rhythm is built from a small set of repeated gaps rather than a strict
@@ -301,8 +309,8 @@ columns, `4px` between icon buttons.
 
 The stat cards are a grid of two equal columns (`1fr 1fr`, 12px gap) collapsing to one
 below 420px. The edit form's three-up field grid (`1fr 1fr 1fr`) collapses to two at the
-same breakpoint. There are three breakpoints in the stylesheet: 420px for phones, and
-960px and 1400px for the desktop columns.
+same breakpoint. There are four breakpoints in the stylesheet: 420px for phones,
+960px and 1400px for the desktop columns, and 1800px for large screens.
 
 ### Named Rules
 
@@ -578,9 +586,9 @@ opening a dialog, so a correction never leaves the list.
   bar, or desktop-only content.
 - **Don't** use accent green as a decorative tint on surfaces, headings, or borders
   that carry no affirmative meaning.
-- **Don't** add another breakpoint casually. The system has three (420px for phones,
-  960px and 1400px for the desktop columns); a new one should be justified by a real
-  layout failure.
+- **Don't** add another breakpoint casually. The system has four (420px for phones,
+  960px and 1400px for the desktop columns, 1800px for large screens); a new one should
+  be justified by a real layout failure.
 - **Don't** use a Unicode glyph or emoji as an icon (`×`, `✎`, `‹`, `›`). They arrive in a
   foreign weight and baseline on every other device. Draw the path instead.
 - **Don't** encode status with color alone, and never with a colored border heavier than

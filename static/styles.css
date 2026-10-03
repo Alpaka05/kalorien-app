@@ -684,6 +684,23 @@ a:hover { color: var(--accent); }
       "entries today history";
   }
   .dash-history { display: block; }
+  /* Die dritte Spalte ist hier so breit wie ein Tablet, das Diagramm
+     bekommt dazu passend mehr Höhe. */
+  .week-chart { height: 240px; }
+}
+
+/* Große Bildschirme (etwa 27 Zoll mit 2560px): vorher stand die Seite in
+ * 1600px mitten auf einer viel breiteren Fläche, mit Schrift und Feldern in
+ * Handygröße. Jetzt füllt sie die Breite und wird als Ganzes größer.
+ *
+ * zoom statt eigener Größen für jedes Element: alle Maße der App sind in px
+ * auf die schmale Spalte abgestimmt, zoom vergrößert sie gemeinsam und hält
+ * die Verhältnisse. Die Breite ist in ungezoomten px angegeben, 2000px
+ * entsprechen also 2300px auf dem Bildschirm. app.js misst das Diagramm mit
+ * clientWidth/clientHeight, die ebenfalls ungezoomt sind. */
+@media (min-width: 1800px) {
+  .app { zoom: 1.15; }
+  #main-view { max-width: 2000px; }
 }
 
 /* Wer Bewegung abgestellt hat, bekommt dieselben Zustände ohne Übergang –

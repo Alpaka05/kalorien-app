@@ -593,7 +593,10 @@ function renderSummary() {
   // (18 px Spalte gegen 27 px Zahl), auf dem Desktop reichlich. Deshalb hier
   // ausrechnen statt eine feste Grenze zu raten.
   const columns = data.series.length;
-  const chartWidth = chart.getBoundingClientRect().width || 335;
+  // clientWidth statt getBoundingClientRect: auf großen Bildschirmen ist die
+  // Seite per CSS-zoom vergrößert, und getBoundingClientRect liefert dann die
+  // vergrößerte Breite – die Spalten würden doppelt skaliert.
+  const chartWidth = chart.clientWidth || 335;
   const widthPerColumn = (gap) => (chartWidth - (columns - 1) * gap) / columns;
   const dense = widthPerColumn(6) < 28; // Platz für die Zahl über dem Balken?
   const gap = dense ? 2 : 6;
