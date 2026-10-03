@@ -364,6 +364,28 @@ a:hover { color: var(--accent); }
 .edit-actions { display: flex; gap: 8px; }
 .field-label { font-size: 11.5px; color: var(--text-muted); display: block; margin-bottom: 3px; }
 
+/* Umschalter Kalorien / Eiweiß / Gewicht. Eine Leiste statt einer Auswahl,
+   damit alle drei Diagramme sichtbar und mit einem Tipp erreichbar sind.
+   Außen 44px hoch wie die übrigen Hauptbedienelemente; der gewählte Teil
+   sieht aus wie ein aktiver 7/14/30-Knopf. */
+.metric-switch {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px;
+  padding: 3px; margin: 0 0 14px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+.metric-switch button {
+  height: 36px; padding: 0 8px; border-radius: 9px;
+  background: transparent; color: var(--text-secondary);
+  border: 1px solid transparent; font-size: 13.5px;
+}
+.metric-switch button:hover:not(:disabled) { background: var(--bg); color: var(--text-primary); }
+.metric-switch button[aria-pressed="true"],
+.metric-switch button[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--accent-bg); border-color: var(--accent);
+  color: var(--accent-dark); font-weight: 600;
+}
+
 .chart-nav { display: flex; align-items: center; gap: 4px; }
 .week-chart { display: flex; align-items: flex-end; gap: 6px; height: 140px; margin-bottom: 4px; position: relative; }
 .goal-line {
@@ -433,6 +455,50 @@ a:hover { color: var(--accent); }
   min-height: 15px; line-height: 15px;
 }
 .week-label.today { color: var(--text-primary); font-weight: 600; }
+
+/* Gewicht: Linie mit Punkten statt Balken – es gibt kein Ziel, an dem ein
+   Tag gemessen würde, also auch kein Grün. Die Spalten bleiben dieselben
+   Knöpfe wie bei den Balken, nur trägt jede statt eines Balkens den Punkt
+   ihres Tages (oder nichts, wenn nicht gewogen wurde). */
+.week-chart.weight .week-col { position: relative; }
+.weight-line {
+  position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible;
+  stroke: var(--text-secondary);
+}
+/* Hilfslinien bei ganzen Kilogramm: die Skala beginnt nicht bei null, ohne
+   sie wäre nicht abzulesen, wie groß ein Ausschlag ist. */
+.weight-grid {
+  position: absolute; left: 0; right: 0; height: 0;
+  border-top: 1px solid var(--border); pointer-events: none;
+}
+.weight-grid span {
+  position: absolute; left: 0; top: -15px; font-size: 10px;
+  font-family: var(--mono); color: var(--text-muted); background: var(--bg); padding: 0 3px;
+  font-variant-numeric: tabular-nums;
+}
+.weight-dot {
+  position: absolute; left: 50%; width: 12px; height: 12px; margin: 0 0 -6px -6px;
+  border-radius: 50%; background: var(--text-primary); border: 2px solid var(--bg);
+  /* Wie bei den Balken: Hover und Auswahl als Ring mit Abstand, der Punkt
+     selbst ändert seine Farbe nicht. */
+  outline: 2px solid transparent; outline-offset: 1px;
+  transition: outline-color var(--dur-fast) var(--ease);
+}
+.weight-value {
+  position: absolute; left: 50%; width: 44px; margin-left: -22px; text-align: center;
+  font-size: 10px; font-family: var(--mono); color: var(--text-secondary);
+  line-height: 12px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.week-col.selected .weight-value { color: var(--text-primary); }
+@media (hover: hover) {
+  .week-col:hover .weight-dot { outline-color: var(--text-secondary); }
+}
+.week-col.selected .weight-dot { outline-color: var(--accent); }
+.week-col:focus-visible .weight-dot { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Tage ohne Messung haben keinen Punkt; der Fokus landet dann auf dem Datum. */
+.week-col.no-dot:focus-visible .week-label {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
 .chart-foot {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   margin: 0 0 1rem;
@@ -598,6 +664,9 @@ a:hover { color: var(--accent); }
   /* Mehr Fläche heißt hier: mehr Auflösung. Die Balkenhöhen rechnet app.js
      aus der tatsächlichen Höhe. */
   .week-chart { height: 200px; }
+  /* Über die ganze Diagrammbreite gezogen wären die drei Felder breiter als
+     jedes andere Bedienelement der Seite. */
+  .metric-switch { max-width: 360px; }
 
   /* Über die ganze Breite wäre die Zeile zu lang zum Lesen. */
   .footnote { max-width: 72ch; }

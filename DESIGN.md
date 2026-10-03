@@ -484,6 +484,34 @@ row under the chart, so the bars keep their full width. Older goals within the r
 keep an inline label on their own stretch of line, backed by the page color. The label
 names what the line is in that mode — "Ziel" when gaining, "Grenze" when losing.
 
+### Metric Switch
+
+A three-part control above the history chart — Kalorien · Eiweiß · Gewicht — that
+changes what the chart draws. It is not navigation: the page stays the same, only
+the chart's content changes, so it does not break the One Column Rule. A Hairline
+Strong track on Card White, 44px tall from 36px segments inside 3px of padding, so
+the outer height matches the primary controls. The chosen segment uses the active
+range-toggle look (Garden Wash, accent border, Deep Garden Green text, 600 weight)
+and carries `aria-pressed`. On the phone it spans the column; from 960px it stops at
+360px. Switching keeps the range, the page and the selected day, so one day can be
+read across all three charts, and the choice is remembered per device in
+`localStorage`, like the color scheme.
+
+- **Protein** uses the calorie bars unchanged, in grams against the protein goal that
+  applied on each day. That goal is always a floor, even on a losing account, so a
+  protein bar is never amber. Without a protein goal no bar turns green, there is no
+  goal line, and the legend says "kein Eiweißziel". The day detail lists the same
+  entries with grams on the right.
+- **Weight** is a line, not bars: there is no weight goal, so nothing is green. The
+  line is Ink Secondary at 1.75 stroke, each weighed day an Ink dot ringed in the page
+  color; days without a measurement have no dot. The scale does not start at zero but
+  spans at least 2 kg, so a 100 g wobble never reads as a fall; hairline grid lines
+  at whole kilograms carry mono labels backed by the page color. Hover and selection
+  ring the dot exactly as they ring a bar. Values sit above the dots when columns are
+  wide enough, otherwise only on the last measurement and the selected day. The
+  legend shows the change across the range, the detail the previous measurement and
+  the difference.
+
 ### Icons
 
 Every icon is drawn, never typed. All paths live in one `ICON` map in `app.js` and render

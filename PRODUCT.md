@@ -78,7 +78,8 @@ frequent entries of the last 60 days, using the latest logged values; a daily kc
 the account's goal direction, with a progress bar and remaining-kcal note; an
 optional protein goal; a daily AI assessment of the last 14 days, cached per day
 and manually refreshable; a 7/14/30-day history chart that pages
-arbitrarily far back, with per-day detail on tap; weight logging with a 30-day
+arbitrarily far back, with per-day detail on tap, switchable between calories,
+protein (against the protein goal) and weight (as a line); weight logging with a 30-day
 trend; CSV export of all entries; light/dark/system theming stored per device;
 multiple isolated accounts.
 
