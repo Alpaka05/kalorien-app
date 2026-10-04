@@ -668,8 +668,12 @@ a:hover { color: var(--accent); }
      jedes andere Bedienelement der Seite. */
   .metric-switch { max-width: 360px; }
 
-  /* Über die ganze Breite wäre die Zeile zu lang zum Lesen. */
-  .footnote { max-width: 72ch; }
+  /* Der Hinweis steht als eine Zeile ganz unten am Fenster, auch wenn die
+     Ansicht kürzer ist: body füllt die Höhe, die Hauptansicht streckt sich
+     mit und schiebt die Fußnote per margin-top: auto nach unten. */
+  body { min-height: 100vh; box-sizing: border-box; }
+  #main-view:not([hidden]) { display: flex; flex-direction: column; }
+  #main-view .footnote { margin-top: auto; padding-top: 2rem; }
 }
 
 /* Drei Spalten: Eingabe und Einträge, Kacheln und Einschätzung, Verlauf und
