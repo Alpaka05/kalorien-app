@@ -177,6 +177,11 @@ async function addEntry(payload, buttonEl, keepLabel = false) {
 }
 
 function handleAdd() {
+  // Solange eine Schätzung läuft, ist der Knopf gesperrt – Enter im Feld
+  // kommt aber an ihm vorbei. Ohne diese Abfrage speichert ein zweites Enter
+  // während der Schätzung denselben Eintrag doppelt (und kostet einen
+  // zweiten KI-Aufruf).
+  if ($('add-btn').disabled) return;
   const desc = $('food-input').value.trim();
   if (!desc) {
     setMessage($('error-msg'), 'Bitte gib ein, was du gegessen oder getrunken hast.');
