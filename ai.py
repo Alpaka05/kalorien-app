@@ -602,6 +602,8 @@ COACH_GOAL = {
 
 COACH_RULES = (
     "Schreibe auf Deutsch, duze die Person, bleib freundlich und konkret. "
+    "Die Tage enden gestern: der heutige Tag läuft noch und fehlt absichtlich, "
+    "bewerte ihn also nicht und erwähne sein Fehlen nicht. "
     "Nenne echte Zahlen aus den Daten statt allgemeiner Ratschläge. Wenn Tage "
     "ohne Einträge dabei sind, weise darauf hin, dass sie die Auswertung "
     "verfälschen, statt sie als Null-Tage zu bewerten. Steht tagesbeginn_uhr "

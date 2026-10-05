@@ -934,8 +934,14 @@ def delete_weight(weight_id: int):
 # --------------------------------------------------------------------------
 
 def coach_inputs(conn, user) -> dict:
+    # Nur abgeschlossene Tage: die 14 Tage enden gestern. Der laufende Tag
+    # würde morgens als "400 kcal, weit unter dem Ziel" bewertet und den
+    # Schnitt drücken. Außerdem bleibt der Hash darüber (siehe coach()) so den
+    # ganzen Tag gleich – neue Einträge von heute lösen keinen KI-Aufruf aus,
+    # die Einschätzung entsteht einmal am Tag oder auf Wunsch.
     start = day_start(user)
-    dates = date_range_iso(14, user_today(user))
+    today = user_today(user)
+    dates = date_range_iso(14, day_offset_iso(1, today))
     rows = conn.execute(
         "SELECT entry_date, COALESCE(SUM(kcal), 0) AS total, "
         "       COALESCE(SUM(protein), 0) AS protein, COUNT(*) AS entries, "
@@ -970,9 +976,9 @@ def coach_inputs(conn, user) -> dict:
     days = [day_entry(d) for d in dates]
     logged = [d for d in days if d["eintraege"] > 0]
     weights = conn.execute(
-        "SELECT weigh_date, kg FROM weights WHERE user_id = ? "
+        "SELECT weigh_date, kg FROM weights WHERE user_id = ? AND weigh_date < ? "
         "ORDER BY weigh_date DESC LIMIT 10",
-        (user["id"],),
+        (user["id"], today),
     ).fetchall()
     return {
         "ziel_kcal_pro_tag": user["kcal_goal"],
@@ -982,7 +988,7 @@ def coach_inputs(conn, user) -> dict:
         # gilt, und nach einem Wechsel der Richtung gilt sie nicht mehr.
         "ziel_richtung": "abnehmen" if goal_direction(user) == "lose" else "zunehmen",
         "tagesbeginn_uhr": start,
-        "heute": user_today(user),
+        "heute": today,
         "tage": days,
         "tage_mit_eintraegen": len(logged),
         "durchschnitt_kcal_erfasste_tage": (
