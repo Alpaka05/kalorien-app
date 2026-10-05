@@ -489,6 +489,8 @@ a:hover { color: var(--accent); }
   font-size: 10px; font-family: var(--mono); color: var(--text-secondary);
   line-height: 12px; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+.weight-value.at-start { left: 0; margin-left: 0; text-align: left; }
+.weight-value.at-end { left: auto; right: 0; margin-left: 0; text-align: right; }
 .week-col.selected .weight-value { color: var(--text-primary); }
 @media (hover: hover) {
   .week-col:hover .weight-dot { outline-color: var(--text-secondary); }

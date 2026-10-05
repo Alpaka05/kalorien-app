@@ -804,6 +804,11 @@ function renderWeightChart(data, geo) {
       // Messung und der ausgewählte Tag.
       const text = document.createElement('span');
       text.className = 'weight-value';
+      // Die Zahl ist breiter als eine schmale Spalte. Mittig über dem Punkt
+      // stünde sie am ersten und letzten Tag über den Diagrammrand hinaus,
+      // dort schließt sie deshalb bündig mit der Spalte ab.
+      if (perColumn < 44 && index === 0) text.classList.add('at-start');
+      if (perColumn < 44 && index === data.series.length - 1) text.classList.add('at-end');
       text.style.bottom = bottom + 8 + 'px';
       text.textContent = !dense || selected || day.date === lastMeasured ? fmtKg(day.kg) : '';
       col.append(dot, text);
