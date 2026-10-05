@@ -25,9 +25,14 @@
 <body>
 <div class="app" id="main-view">
   <div class="topbar">
-    <div>
-      <h1>Kalorien-Tagebuch</h1>
-      <p class="subtitle">Sag einfach, was du gegessen oder getrunken hast.</p>
+    <!-- Das Logo erscheint erst ab 960px, auf dem Handy bleibt der Kopf wie
+         er ist. -->
+    <div class="brand">
+      <img class="brand-logo" src="/logo-96.png" width="48" height="48" alt="" />
+      <div>
+        <h1>Kalorien-Tagebuch</h1>
+        <p class="subtitle">Sag einfach, was du gegessen oder getrunken hast.</p>
+      </div>
     </div>
     <div class="topbar-actions">
       <button class="icon-btn menu-btn" id="settings-btn" title="Einstellungen"

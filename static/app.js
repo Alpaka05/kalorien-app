@@ -581,7 +581,8 @@ function renderSummary() {
     : `Letzte ${state.range} Tage`;
   $('chart-next').disabled = !state.end;
 
-  // Die Höhe kommt aus dem CSS (.week-chart: 140px, auf dem Desktop 200px),
+  // Die Höhe kommt aus dem CSS (.week-chart: 140px, auf dem Desktop füllt es
+  // die freie Fensterhöhe, mindestens 220px),
   // davon gehen .week-total (12) + 2x gap (10) + .week-label (15) ab. Ist der
   // Wert größer, staucht Flexbox die hohen Balken auf dieselbe Höhe. 140 gilt,
   // solange das Diagramm ausgeblendet ist und keine eigene Höhe hat.

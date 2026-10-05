@@ -273,33 +273,44 @@ body padding — one destination, no navigation, no sidebar, no tabs. The login 
 a narrower 380px column offset `8vh` from the top; the settings view keeps the 560px
 column at every width, because a form only gets harder to read when its fields grow.
 
-From 960px the main view widens to `max-width: 1600px` with `2.5rem` side padding and
-its content is distributed onto a grid (`.dash`) — the page fills the screen instead of
-sitting in a narrow strip. The markup groups the content in the phone's order, and those
-groups are plain blocks without spacing of their own below 960px, so the phone layout is
-untouched by them:
+From 960px the main view drops its width cap and becomes a twelve-column grid
+(`24px` gaps, `2.5rem` side padding) that fills the window's height as well as its
+width — on a large monitor there is no empty band below the content. The markup keeps
+the phone's order; on the desktop the wrappers `.topbar`, `.dash` and `.dash-history`
+switch to `display: contents`, so their parts become cells of that grid, while below
+960px the groups stay plain blocks without spacing of their own and the phone layout is
+untouched:
 
-- **960–1399px, two columns:** input and today's entries on the left, stat cards and
-  coach on the right, history chart and weight across the full width below (chart
-  `2fr`, weight `1fr`).
-- **From 1400px, three columns:** input and entries, cards and coach, chart and weight.
-  The middle column is at least 380px, the width two stat cards need for a four-digit
-  value side by side.
-- **From 1800px, larger:** on a 27-inch screen at 2560px the 1600px page sat in the
-  middle of a much wider field with phone-sized type. From 1800px both views get CSS
-  `zoom: 1.15` and the main view's cap rises to 2000px (2300px on screen), so the page
-  fills the width and everything grows together. Zoom instead of per-element sizes,
-  because every measure is tuned in px for the narrow column; `app.js` measures the
-  chart with `clientWidth`/`clientHeight`, which ignore the zoom, so the bars are not
-  scaled twice.
+```
+logo + title  |   input + quick chips (centered)   |  menu
+stat cards    |  coach
+today's list  |  history chart (grows with the window height)
+weight        |
+disclaimer
+```
 
-Anything that spans several grid rows reaches into the one `1fr` row, and the browser
-leaves such items out when sizing the `auto` rows. The first row is therefore exactly as
-tall as the input, and every column stacks tight on its own — a long entry list never
-opens a gap under the coach, and a tall coach never pushes the entries down. On the
-desktop the history chart grows from 140px to 200px, and to 240px in the three-column
-layout; `app.js` reads the real height and
-redraws whenever the chart changes size.
+- **The input sits in the middle of the header**, 52px tall and at most 760px wide,
+  with the quick chips centered beneath it: logging is the one action the page is
+  opened for. The logo (`logo-96.png`, 48px) appears to the left of the title.
+- **960–1399px:** cards, entries and weight take five of twelve columns, coach and
+  chart seven. The metric switch stands above the range controls as on the phone, and
+  the selected day's detail sits below the chart.
+- **From 1400px:** the split becomes four to eight. Switch and range share one row,
+  and the selected day's detail stands in a 320px column beside the chart, so picking
+  a day never shrinks the bars. With no day selected that column is empty and 0 wide.
+- **From 1800px, larger:** both views get CSS `zoom: 1.15`, because phone-sized type
+  looks lost on a 27-inch screen. Zoom instead of per-element sizes, because every
+  measure is tuned in px for the narrow column; `app.js` measures the chart with
+  `clientWidth`/`clientHeight`, which ignore the zoom, so the bars are not scaled twice.
+
+The last content row is `1fr` and absorbs the remaining window height. The chart spans
+into it and stretches (at least 220px); `app.js` reads its real size and redraws
+whenever it changes. The chart carries `contain: size`, so its height comes from the
+grid alone — otherwise the bars, which are computed from that very height, would count
+towards it and the chart would grow with every redraw. Anything spanning into the `1fr`
+row is left out when the browser sizes the `auto` rows, so the entries close up under
+the cards no matter how tall the chart gets. The coach is stretched to the height of
+the two stacked stat cards, with its footer pinned to the bottom.
 
 Vertical rhythm is built from a small set of repeated gaps rather than a strict
 baseline grid: `8px` between paired controls, `1rem` after a message or chip row,
@@ -319,7 +330,8 @@ in a fixed vertical order: input, quick chips, stats, coach, today's entries, hi
 chart, weight, disclaimer. The whole interface is meant to be thumbed through in one
 scroll. The desktop columns redistribute these same groups and keep the order inside
 each group; they never add a sidebar, a tab bar, navigation, or content that exists only
-on the desktop.
+on the desktop. The one exception is the logo beside the title, which is branding, not
+content.
 
 **The 16px Zoom Guard.** On touch screens (`pointer: coarse`) and below 420px every
 form field goes to 16px. Anything smaller makes iOS Safari zoom into the page on tap
@@ -465,7 +477,7 @@ a muted timestamp against a link-style refresh action.
 
 ### History Chart
 
-Bars are full-height buttons in a flex row (140px tall, 200px on the desktop, 6px
+Bars are full-height buttons in a flex row (140px tall, on the desktop filling the free window height, 6px
 gaps), each column bottom-aligned so all bars share a baseline. On a gaining account the bar is Hairline
 Strong when the day fell short and accent when it reached the goal; on a losing
 account accent means the day stayed under the ceiling and Muted Amber means it went
@@ -583,7 +595,8 @@ opening a dialog, so a correction never leaves the list.
 - **Don't** introduce a second accent hue. Amber and brick are reserved for caution
   and destruction; a fourth hue would break the Quiet Accent Rule.
 - **Don't** widen the container past 560px below 960px, and never add a sidebar, a tab
-  bar, or desktop-only content.
+  bar, or desktop-only content (the header logo is the one piece of desktop-only
+  branding).
 - **Don't** use accent green as a decorative tint on surfaces, headings, or borders
   that carry no affirmative meaning.
 - **Don't** add another breakpoint casually. The system has four (420px for phones,

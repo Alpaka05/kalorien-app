@@ -162,6 +162,7 @@ h1 {
 
 .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .topbar-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.brand-logo { display: none; }
 
 input[type="text"], input[type="email"], input[type="number"], input[type="time"], input[type="date"] {
   height: 44px; padding: 0 14px;
@@ -614,99 +615,162 @@ a:hover { color: var(--accent); }
   input.auth-code { font-size: 20px; }
 }
 
-/* Desktop: dieselben Gruppen wie auf dem Handy, auf Spalten verteilt.
+/* Desktop: dieselben Gruppen wie auf dem Handy, über die ganze Fläche verteilt.
  *
  * Unter 960px bleibt alles eine Spalte, die Gruppen (.dash-*) sind dort
  * gewöhnliche Blöcke ohne Abstände und ändern an der Handy-Ansicht nichts.
- * Die Reihenfolge im HTML ist die der Handy-Ansicht, deshalb stehen die
- * Eingabe und die Einträge im Quelltext nicht nebeneinander.
  *
- * Die Zeilen sind so gewählt, dass keine Spalte auf eine andere warten muss:
- * Was mehrere Zeilen überspannt, reicht immer bis in die 1fr-Zeile. Solche
- * Elemente zählt der Browser bei der Höhe der auto-Zeilen nicht mit, die
- * erste Zeile ist also genau so hoch wie die Eingabe, und die Einträge
- * schließen ohne Lücke an – egal wie hoch Kacheln, Einschätzung oder Verlauf
- * werden.
+ * Ab 960px ist die Hauptansicht ein Raster aus zwölf Spalten, das die Höhe
+ * des Fensters füllt:
+ *
+ *   Logo und Titel  |      Eingabe + Schnellwahl      |  Menü
+ *   Kacheln         |  Einschätzung
+ *   Einträge        |  Verlauf (wächst mit der Höhe)
+ *   Gewicht         |
+ *   Hinweis
+ *
+ * Die Eingabe steht mittig im Kopf, weil sie die eine Handlung ist, für die
+ * man die Seite öffnet. Die Hüllen .topbar, .dash und .dash-history lösen sich
+ * per display: contents auf, damit ihre Teile Zellen dieses Rasters werden –
+ * die Reihenfolge im HTML bleibt die der Handy-Ansicht.
+ *
+ * Die letzte Inhaltszeile ist 1fr und nimmt die restliche Fensterhöhe auf.
+ * Das Diagramm reicht bis in diese Zeile und wächst mit; app.js misst seine
+ * tatsächliche Größe und zeichnet neu. So bleibt auf großen Bildschirmen
+ * keine leere Fläche unter dem Inhalt. Was bis in die 1fr-Zeile reicht, zählt
+ * der Browser bei der Höhe der auto-Zeilen nicht mit, deshalb schließen die
+ * Einträge ohne Lücke an die Kacheln an, egal wie hoch der Verlauf wird.
  *
  * Nur die Hauptansicht wird breiter. Die Einstellungen sind ein Formular und
  * bleiben bei 560px, längere Felder würden dort nur schwerer lesbar.
  */
 @media (min-width: 960px) {
-  body { padding-left: 2.5rem; padding-right: 2.5rem; }
-  #main-view { max-width: 1600px; }
+  body {
+    padding: 1.5rem 2.5rem 1rem;
+    min-height: 100vh; box-sizing: border-box;
+  }
+  #main-view { max-width: none; }
+  #main-view:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: auto auto auto 1fr auto;
+    column-gap: 24px;
+    align-items: start;
+  }
+  .topbar, .dash, .dash-history { display: contents; }
 
-  /* Zwei Spalten: links Eingabe und Einträge, rechts Kacheln und
-     Einschätzung, darunter über die volle Breite Diagramm und Gewicht. */
-  .dash {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto 1fr auto;
-    grid-template-areas:
-      "input   today"
-      "entries today"
-      "history history";
-    column-gap: 40px;
-    align-items: start;
+  /* Kopf: Logo links, Eingabe in der Mitte, Menü rechts. Logo und Menü
+     stehen auf der Höhe des Eingabefelds, nicht auf der der Chips. */
+  .brand {
+    grid-column: 1 / 4; grid-row: 1;
+    display: flex; align-items: center; gap: 12px; min-height: 52px;
   }
-  .dash-input { grid-area: input; }
-  .dash-today { grid-area: today; }
-  .dash-entries { grid-area: entries; }
-  .dash-history {
-    grid-area: history;
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    column-gap: 40px;
-    align-items: start;
+  .brand-logo { display: block; width: 48px; height: 48px; flex-shrink: 0; }
+  .brand h1 { margin: 0; }
+  .brand .subtitle { margin: 2px 0 0; font-size: 13px; }
+  .topbar-actions {
+    grid-column: 10 / 13; grid-row: 1; justify-self: end;
+    min-height: 52px; align-items: center;
   }
-  /* Neben dem Diagramm ist die Gewichtsspalte so schmal wie ein Handy. Passt
-     der Trend nicht neben die Überschrift, bekommt er wie dort eine eigene
-     Zeile statt zwei gequetschte; bei drei Spalten passt er meist daneben. */
+  .dash-input {
+    grid-column: 4 / 10; grid-row: 1;
+    width: 100%; max-width: 760px; justify-self: center;
+    margin-bottom: 1rem;
+  }
+  /* Die Hauptsache der Seite, also etwas größer als die übrigen Felder. */
+  .dash-input .input-row { margin-bottom: 10px; }
+  .dash-input .input-row input[type="text"],
+  .dash-input .input-row button { height: 52px; }
+  .dash-input .input-row input[type="text"] { font-size: 16px; padding: 0 18px; }
+  .dash-input .input-row button { padding: 0 22px; }
+  .dash-input .chips { justify-content: center; margin-bottom: 0; }
+  .dash-input .message { text-align: center; margin: 6px 0 0; }
+
+  /* Kacheln und Einschätzung in einer Zeile, auf denselben Spalten wie
+     Einträge und Verlauf darunter. */
+  .dash-today {
+    grid-column: 1 / 13; grid-row: 2;
+    display: grid; grid-template-columns: subgrid;
+    align-items: stretch; margin-bottom: 1.75rem;
+  }
+  .dash-today .cards {
+    grid-column: 1 / 6; margin: 0;
+    grid-template-columns: 1fr; grid-auto-rows: 1fr;
+  }
+  /* Die Einschätzung ist so hoch wie die beiden Kacheln; die Fußzeile
+     rutscht dann an den unteren Rand statt mitten in die Karte. */
+  .dash-today .coach {
+    grid-column: 6 / 13; margin: 0;
+    display: flex; flex-direction: column;
+  }
+  .dash-today .coach[hidden] { display: none; }
+  .dash-today .coach-foot { margin-top: auto; padding-top: 10px; }
+
+  .dash-entries { grid-column: 1 / 6; grid-row: 3; }
+  .dash-weight { grid-column: 1 / 6; grid-row: 4; }
   .dash-weight .section-head { flex-wrap: wrap; }
 
-  /* Mehr Fläche heißt hier: mehr Auflösung. Die Balkenhöhen rechnet app.js
-     aus der tatsächlichen Höhe. */
-  .week-chart { height: 200px; }
-  /* Über die ganze Diagrammbreite gezogen wären die drei Felder breiter als
-     jedes andere Bedienelement der Seite. */
-  .metric-switch { max-width: 360px; }
-
-  /* Der Hinweis steht als eine Zeile ganz unten am Fenster, auch wenn die
-     Ansicht kürzer ist: body füllt die Höhe, die Hauptansicht streckt sich
-     mit und schiebt die Fußnote per margin-top: auto nach unten. */
-  body { min-height: 100vh; box-sizing: border-box; }
-  #main-view:not([hidden]) { display: flex; flex-direction: column; }
-  #main-view .footnote { margin-top: auto; padding-top: 2rem; }
-}
-
-/* Drei Spalten: Eingabe und Einträge, Kacheln und Einschätzung, Verlauf und
-   Gewicht. Die mittlere Spalte braucht mindestens 380px, sonst passen die
-   beiden Kacheln mit einem vierstelligen Wert nicht nebeneinander. */
-@media (min-width: 1400px) {
-  .dash {
-    grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr) minmax(0, 1.2fr);
-    grid-template-rows: auto 1fr;
-    grid-template-areas:
-      "input   today history"
-      "entries today history";
+  /* Verlauf: Umschalter, Zeitraum, darunter das Diagramm, das die freie Höhe
+     füllt, und der gewählte Tag. Bis 1400px ist die Spalte so schmal, dass
+     Umschalter und Zeitraum wie auf dem Handy untereinander stehen. */
+  .dash-chart {
+    grid-column: 6 / 13; grid-row: 3 / 5; align-self: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(220px, 1fr) auto auto;
+    grid-template-areas: "switch" "head" "chart" "foot" "detail";
   }
-  .dash-history { display: block; }
-  /* Die dritte Spalte ist hier so breit wie ein Tablet, das Diagramm
-     bekommt dazu passend mehr Höhe. */
-  .week-chart { height: 240px; }
+  .metric-switch { grid-area: switch; width: 360px; }
+  .dash-chart .section-head { grid-area: head; margin-bottom: 14px; }
+  /* contain: size, damit die Höhe allein aus dem Raster kommt. Sonst zählen
+     die Balken mit, die app.js aus eben dieser Höhe berechnet – das
+     Diagramm würde sich bei jedem Neuzeichnen selbst größer machen. */
+  .week-chart { grid-area: chart; height: auto; min-height: 220px; contain: size; }
+  .chart-foot { grid-area: foot; }
+  .day-detail { grid-area: detail; margin-bottom: 1rem; }
+
+  #main-view .footnote {
+    grid-column: 1 / 13; grid-row: 5;
+    margin: 0; padding-top: 1rem;
+  }
 }
 
-/* Große Bildschirme (etwa 27 Zoll mit 2560px): vorher stand die Seite in
- * 1600px mitten auf einer viel breiteren Fläche, mit Schrift und Feldern in
- * Handygröße. Jetzt füllt sie die Breite und wird als Ganzes größer.
+/* Ab 1400px: Kacheln und Einträge in einem Drittel, der Verlauf in zwei.
+   Umschalter und Zeitraum teilen sich eine Zeile, und neben dem Diagramm ist
+   Platz für den gewählten Tag. Dort steht er neben statt unter den Balken,
+   damit das Diagramm beim Antippen eines Tages nicht schrumpft. Ist kein Tag
+   gewählt, ist die Spalte leer und 0 breit. */
+@media (min-width: 1400px) {
+  .dash-today .cards, .dash-entries, .dash-weight { grid-column: 1 / 5; }
+  .dash-today .coach { grid-column: 5 / 13; }
+  .dash-chart {
+    grid-column: 5 / 13;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(220px, 1fr) auto;
+    grid-template-areas:
+      "switch head  head"
+      "chart  chart detail"
+      "foot   foot  detail";
+  }
+  /* Abstände als margin statt column-gap: ohne gewählten Tag bliebe sonst
+     rechts neben dem Diagramm eine leere Lücke stehen. */
+  .metric-switch { margin-right: 24px; }
+  .day-detail {
+    width: 320px; margin: 0 0 1rem 24px;
+    align-self: start; max-height: 100%; overflow-y: auto;
+  }
+}
+
+/* Große Bildschirme (etwa 27 Zoll mit 2560px): Schrift und Felder in
+ * Handygröße wirken dort verloren. Die Seite füllt die Breite und wird als
+ * Ganzes größer.
  *
  * zoom statt eigener Größen für jedes Element: alle Maße der App sind in px
  * auf die schmale Spalte abgestimmt, zoom vergrößert sie gemeinsam und hält
- * die Verhältnisse. Die Breite ist in ungezoomten px angegeben, 2000px
- * entsprechen also 2300px auf dem Bildschirm. app.js misst das Diagramm mit
- * clientWidth/clientHeight, die ebenfalls ungezoomt sind. */
+ * die Verhältnisse. app.js misst das Diagramm mit clientWidth/clientHeight,
+ * die ungezoomt sind. */
 @media (min-width: 1800px) {
   .app { zoom: 1.15; }
-  #main-view { max-width: 2000px; }
 }
 
 /* Wer Bewegung abgestellt hat, bekommt dieselben Zustände ohne Übergang –
