@@ -10,6 +10,16 @@ Läuft komplett auf dem eigenen Server. Außer der Gemini-API für die
 Schätzungen wird kein externer Dienst gebraucht – und die ist im Free Tier
 von Google AI Studio kostenlos.
 
+![Startseite am Desktop im Dunkelmodus: Eingabe mit Schnellwahl, Tagesstand, KI-Einschätzung und Verlauf der letzten 14 Tage](docs/screenshots/desktop-dunkel.png)
+
+<p align="center">
+  <img src="docs/screenshots/handy-start.png" width="300" alt="Startseite am Handy: Freitext-Eingabe, Schnellwahl-Chips und Tagesstand">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/handy-verlauf.png" width="300" alt="Verlauf am Handy: 30 Tage als Balken, darunter die Einträge des gewählten Tages">
+</p>
+
+<sub>Screenshots mit Beispieldaten.</sub>
+
 ## Funktionen
 
 - **Freitext-Eingabe** – „2 Scheiben Toast mit Butter" reicht, kcal und Eiweiß
