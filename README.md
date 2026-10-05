@@ -33,8 +33,10 @@ von Google AI Studio kostenlos.
 - **Ziel: Zunehmen oder Abnehmen** – dieselbe Zahl, zwei Lesarten. Beim
   Zunehmen willst du sie erreichen, beim Abnehmen darunter bleiben; Einschätzung
   und Diagrammfarben drehen sich mit
-- **KI-Einschätzung** – bewertet die letzten 14 Tage gegenüber dem Ziel und sagt,
-  wo du nachgelassen hast
+- **KI-Einschätzung** – bewertet die letzten 14 abgeschlossenen Tage gegenüber
+  dem Ziel und sagt, wo du nachgelassen hast. Der laufende Tag zählt nicht mit,
+  deshalb entsteht sie einmal am Tag (oder auf „Neu einschätzen“) und nicht
+  nach jedem Eintrag
 - **Verlauf** – 7, 14 oder 30 Tage, beliebig weiter zurückblätterbar; ein Klick
   auf einen Balken zeigt, was an dem Tag wann gegessen wurde. Ein Umschalter
   wechselt zwischen **Kalorien**, **Eiweiß** (gegen das Eiweißziel) und

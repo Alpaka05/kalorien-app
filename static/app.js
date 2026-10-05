@@ -569,11 +569,16 @@ function renderSummary() {
   chart.classList.toggle('weight', state.metric === 'weight');
 
   // Die Kachel zeigt immer die Kalorien, egal welches Diagramm gewählt ist.
-  const logged = data.series.filter((d) => d.entries > 0);
+  // Der laufende Tag zählt nicht mit: morgens um zehn würde er den Schnitt
+  // mit einem halben Tag nach unten ziehen.
+  const withToday = data.series.some((d) => d.date === data.today);
+  const logged = data.series.filter((d) => d.entries > 0 && d.date !== data.today);
   const average = logged.length
     ? logged.reduce((sum, d) => sum + d.total, 0) / logged.length
     : 0;
-  $('avg-label').textContent = `Ø erfasste Tage (${state.range})`;
+  $('avg-label').textContent = withToday
+    ? 'Ø erfasste Tage, ohne heute'
+    : `Ø erfasste Tage (${state.range})`;
   $('week-avg').textContent = fmtKcal(average);
 
   $('chart-title').textContent = state.end
@@ -976,7 +981,6 @@ async function saveWeight() {
     setMessage($('weight-msg'), 'Gewicht gespeichert.', 'ok');
     // Die Zusammenfassung trägt das Gewicht pro Tag für das Diagramm.
     await Promise.all([loadWeights(), loadSummary()]);
-    loadCoach();
   } catch (err) {
     setMessage($('weight-msg'), err.message);
   } finally {
@@ -1181,6 +1185,9 @@ async function saveSettings() {
   const moved = state.me.moved_entries || 0;
   try {
     await refreshAll();
+    // Ziel, Richtung oder Modell können sich geändert haben – dann rechnet
+    // der Server neu, sonst kommt die gespeicherte Einschätzung zurück.
+    loadCoach();
   } catch (err) {
     setMessage($('error-msg'), err.message);
   } finally {
@@ -1204,7 +1211,6 @@ async function refreshAll() {
   // Die Schnellwahl hängt an den Einträgen: ein neuer oder korrigierter
   // Eintrag kann einen Knopf hinzufügen oder dessen Werte ändern.
   await Promise.all([loadToday(), loadSummary(), loadWeights(), loadPresets()]);
-  loadCoach();
 }
 
 function setRange(days) {
@@ -1317,6 +1323,9 @@ $('logout-btn').addEventListener('click', async () => {
     document.querySelector('[data-range="7"]').classList.add('active');
     setMetric(storedMetric());
     await refreshAll();
+    // Nur hier und auf "Neu einschätzen": die Einschätzung bewertet die
+    // abgeschlossenen Tage und ändert sich durch neue Einträge nicht.
+    loadCoach();
   } catch (err) {
     setMessage($('error-msg'), err.message);
   }
