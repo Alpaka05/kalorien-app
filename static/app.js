@@ -1235,6 +1235,11 @@ const METRIC_KEY = 'kcal-chart-metric';
 const METRICS = ['kcal', 'protein', 'weight'];
 
 function storedMetric() {
+  // Auf dem Desktop beginnt die Seite immer mit den Kalorien: dort ist das
+  // Diagramm die größte Fläche und soll beim Öffnen den Tagesstand zeigen,
+  // nicht das zuletzt angesehene Gewicht. Auf dem Handy bleibt die gemerkte
+  // Wahl. Die Grenze ist dieselbe wie im CSS für das Desktop-Layout.
+  if (window.matchMedia('(min-width: 960px)').matches) return 'kcal';
   try {
     const value = localStorage.getItem(METRIC_KEY);
     return METRICS.includes(value) ? value : 'kcal';

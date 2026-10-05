@@ -41,7 +41,8 @@ von Google AI Studio kostenlos.
   auf einen Balken zeigt, was an dem Tag wann gegessen wurde. Ein Umschalter
   wechselt zwischen **Kalorien**, **Eiweiß** (gegen das Eiweißziel) und
   **Gewicht** (als Linie); Zeitraum und gewählter Tag bleiben dabei stehen,
-  die Wahl merkt sich das Gerät
+  die Wahl merkt sich das Handy; auf dem Desktop startet der Verlauf immer
+  mit den Kalorien
 - **Schnellwahl** – deine häufigsten Einträge der letzten 60 Tage (ab zwei
   Mal) als Chips, das Häufigste vorne; ein Tap genügt (ohne neuen API-Aufruf).
   Die Werte kommen vom jüngsten Eintrag, eine Korrektur gilt also auch für den
