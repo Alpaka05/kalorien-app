@@ -70,8 +70,9 @@ GEMINI_ENDPOINT = (
 # Gemini-Modelle denken standardmäßig auf Stufe "medium" vor jeder Antwort.
 # Für eine Kalorienschätzung ist das unnötig und kostet Sekunden, deshalb wird
 # die Denkstufe pro Aufruf gesetzt (derzeit "low" für beide Aufrufe).
-# Nicht jedes Modell kennt den Parameter; lehnt Gemini ihn ab, wird der Aufruf
-# einmal ohne ihn wiederholt und der Parameter danach nicht mehr gesendet.
+# Nicht jedes Modell kennt den Parameter; lehnt Gemini ihn ausdrücklich ab
+# (400 mit "thinking" in der Meldung), wird der Aufruf einmal ohne ihn
+# wiederholt und der Parameter danach nicht mehr gesendet.
 # Mit AI_THINKING=off lässt er sich von vornherein abschalten.
 _thinking_enabled = os.environ.get("AI_THINKING", "").strip().lower() != "off"
 
@@ -346,10 +347,13 @@ def _gemini_json(prompt: str, schema: dict, max_tokens: int, thinking: str,
                 deadline,
             )
         except _BadRequest as exc:
-            if not _thinking_enabled:
+            # Nur wenn Gemini sich ausdrücklich an der Denkstufe stört: einmal
+            # ohne versuchen und den Parameter für den Rest der Laufzeit
+            # weglassen. Andere 400er (etwa ein zu langer Prompt) hätten sie
+            # sonst dauerhaft abgeschaltet – und ohne sie denkt Gemini auf
+            # "medium", was die Einschätzung in den Proxy-Timeout treibt.
+            if not _thinking_enabled or "thinking" not in str(exc).lower():
                 raise
-            # Vermutlich kennt das Modell die Denkstufe nicht: einmal ohne
-            # versuchen und den Parameter für den Rest der Laufzeit weglassen.
             log.warning(
                 "Gemini lehnt die Anfrage mit Denkstufe ab (Modell %s): %s – "
                 "wiederhole ohne thinkingConfig",
