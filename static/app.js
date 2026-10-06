@@ -94,6 +94,7 @@ const state = {
   summary: null,
   selectedDay: null,
   editingId: null,
+  undo: null,         // Zuletzt gelöschter Eintrag von heute: { entry, index }
   presets: null,      // Schnellwahl aus /api/presets
   weights: null,      // Messungen aus /api/weights, neueste zuerst
 };
@@ -153,8 +154,12 @@ function setMessage(el, text, kind = 'error') {
 // Textwechsel würde die Auszeichnung zerstören (und den Chip beim Zurücksetzen
 // auf eine Zeile Text eindampfen), deshalb zeigen sie das Warten nur über den
 // gesperrten Zustand.
-async function addEntry(payload, buttonEl, keepLabel = false) {
+// onSaved läuft direkt nach dem Speichern, noch bei gesperrtem Knopf. Das
+// Eingabefeld leert nur handleAdd darüber – ein Chip soll keinen Text löschen,
+// der gerade getippt wird.
+async function addEntry(payload, buttonEl, keepLabel = false, onSaved = null) {
   setMessage($('error-msg'), '');
+  state.undo = null;
   const label = buttonEl && !keepLabel ? buttonEl.textContent : null;
   if (buttonEl) {
     buttonEl.disabled = true;
@@ -164,7 +169,7 @@ async function addEntry(payload, buttonEl, keepLabel = false) {
   }
   try {
     await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
-    $('food-input').value = '';
+    if (onSaved) onSaved();
     await refreshAll();
   } catch (err) {
     setMessage($('error-msg'), err.message);
@@ -182,12 +187,17 @@ function handleAdd() {
   // während der Schätzung denselben Eintrag doppelt (und kostet einen
   // zweiten KI-Aufruf).
   if ($('add-btn').disabled) return;
-  const desc = $('food-input').value.trim();
+  const input = $('food-input');
+  const desc = input.value.trim();
   if (!desc) {
     setMessage($('error-msg'), 'Bitte gib ein, was du gegessen oder getrunken hast.');
     return;
   }
-  addEntry({ desc }, $('add-btn'));
+  // Nur leeren, wenn dort noch der gespeicherte Text steht – wer während der
+  // Schätzung schon weitertippt, verliert sonst das Neue.
+  addEntry({ desc }, $('add-btn'), false, () => {
+    if (input.value.trim() === desc) input.value = '';
+  });
 }
 
 // --------------------------------------------------------------------------
@@ -226,7 +236,13 @@ function renderToday() {
   renderGoalProgress(totalKcal, totalProtein);
   renderTodayHint();
 
-  if (!entries.length) {
+  // Ein Eintrag von gestern, der nach dem Tageswechsel noch in state.undo
+  // steht, gehört nicht in die heutige Liste.
+  const undo = state.undo && state.today && state.undo.entry.date === state.today.date
+    ? state.undo
+    : null;
+
+  if (!entries.length && !undo) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.textContent = 'Noch nichts eingetragen heute.';
@@ -234,11 +250,48 @@ function renderToday() {
     return;
   }
 
-  entries.forEach((entry) => {
-    list.appendChild(
-      state.editingId === entry.id ? buildEditForm(entry) : buildEntryRow(entry)
-    );
+  const rows = entries.map((entry) =>
+    state.editingId === entry.id ? buildEditForm(entry) : buildEntryRow(entry)
+  );
+  if (undo) rows.splice(Math.min(undo.index, rows.length), 0, buildUndoRow(undo.entry));
+  rows.forEach((row) => list.appendChild(row));
+}
+
+// Steht an der Stelle des gelöschten Eintrags, bis etwas anderes eingetragen,
+// geändert oder gelöscht wird. Zurückgeholt wird mit den gespeicherten Werten,
+// also ohne neue Schätzung.
+function buildUndoRow(entry) {
+  const row = document.createElement('div');
+  row.className = 'entry-row undo-row';
+  row.setAttribute('role', 'status');
+
+  const text = document.createElement('p');
+  text.className = 'undo-text';
+  text.textContent = 'Gelöscht: ' + entry.desc;
+
+  const btn = document.createElement('button');
+  btn.className = 'link';
+  btn.textContent = 'Rückgängig';
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await api('/api/entries', {
+        method: 'POST',
+        body: JSON.stringify({
+          desc: entry.desc, kcal: entry.kcal, protein: entry.protein,
+          date: entry.date, time: entry.time,
+        }),
+      });
+      state.undo = null;
+      await refreshAll();
+    } catch (err) {
+      setMessage($('error-msg'), err.message);
+      btn.disabled = false;
+    }
   });
+
+  row.append(text, btn);
+  return row;
 }
 
 function buildEntryRow(entry) {
@@ -286,6 +339,10 @@ function buildEntryRow(entry) {
     del.disabled = true;
     try {
       await api('/api/entries/' + entry.id, { method: 'DELETE' });
+      // Der Mülleimer liegt direkt neben dem Stift und fragt nicht nach –
+      // deshalb lässt sich das Löschen an derselben Stelle zurücknehmen.
+      const index = state.today ? state.today.entries.findIndex((e) => e.id === entry.id) : 0;
+      state.undo = { entry, index: Math.max(0, index) };
       await refreshAll();
     } catch (err) {
       setMessage($('error-msg'), err.message);
@@ -379,6 +436,7 @@ function buildEditForm(entry) {
         }),
       });
       state.editingId = null;
+      state.undo = null;
       await refreshAll();
     } catch (err) {
       setMessage($('error-msg'), err.message);

@@ -359,6 +359,14 @@ a:hover { color: var(--accent); }
 .entry-kcal { font-family: var(--mono); font-size: 14px; color: var(--text-primary); }
 .entry-protein { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); }
 .empty-state { padding: 16px 0; font-size: 14px; color: var(--text-muted); }
+/* Platzhalter für einen gerade gelöschten Eintrag: gleiche Zeilenhöhe wie die
+   Einträge, damit die Liste beim Löschen nicht springt. */
+.undo-row { min-height: 61px; }
+.undo-text {
+  margin: 0; font-size: 14px; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.undo-row button.link { flex-shrink: 0; font-size: 14px; }
 
 .edit-form { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .edit-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
