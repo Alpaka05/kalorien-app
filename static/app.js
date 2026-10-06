@@ -1378,6 +1378,11 @@ $('logout-btn').addEventListener('click', async () => {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/login';
 });
+$('logout-all-btn').addEventListener('click', async () => {
+  if (!window.confirm('Auf allen Geräten abmelden? Danach brauchst du überall einen neuen Code.')) return;
+  await fetch('/api/auth/logout-all', { method: 'POST' });
+  window.location.href = '/login';
+});
 
 (async function start() {
   try {
