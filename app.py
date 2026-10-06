@@ -424,6 +424,17 @@ def logout():
     return response
 
 
+@app.route("/api/auth/logout-all", methods=["POST"])
+@require_user
+def logout_all():
+    # Etwa nach einem verlorenen Handy: beendet auch die Sitzung, mit der die
+    # Anfrage kommt.
+    auth.destroy_all_sessions(g.conn, g.user["id"])
+    response = jsonify({"ok": True})
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return response
+
+
 # --------------------------------------------------------------------------
 # Konto und Einstellungen
 # --------------------------------------------------------------------------

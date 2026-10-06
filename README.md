@@ -135,6 +135,16 @@ Weitere Personen schaltest du in der `.env` frei (deine Adresse mit aufführen):
 ALLOWED_EMAILS=du@example.com,partnerin@example.com
 ```
 
+Die Liste gilt für alle Konten, nicht nur für neue: Streichst du eine Adresse
+und startest den Container neu, kann sie sich nicht mehr anmelden, und ihre
+laufenden Sitzungen enden beim nächsten Aufruf. Adressen aus `ADMIN_EMAILS`
+sind immer zugelassen, damit du dich nicht versehentlich aussperrst.
+
+Pro Adresse lassen sich höchstens 5 Codes pro Stunde und 10 pro Tag anfordern,
+jeder Code erlaubt 5 Versuche und gilt nur einmal. In den Einstellungen meldet
+„Auf allen Geräten abmelden“ alle Sitzungen des eigenen Kontos ab – etwa nach
+einem verlorenen Handy.
+
 Wer die Registrierung wirklich für alle offen haben will, setzt
 `REGISTRATION_OPEN=true` – sinnvoll nur mit einem Zugriffsschutz davor,
 etwa Cloudflare Access.
