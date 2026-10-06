@@ -20,11 +20,20 @@ from timeutil import utc_now_iso
 CODE_TTL_MINUTES = 15
 CODE_MAX_ATTEMPTS = 5
 CODES_PER_EMAIL_PER_HOUR = 5
+# Obergrenze pro Tag: mit 5 Versuchen je Code sind das höchstens 50 Rateversuche
+# am Tag gegen eine bekannte Adresse. Ohne sie wären es 600 (5 pro Stunde × 24
+# × 5), über Monate eine echte Chance auf einen Treffer.
+CODES_PER_EMAIL_PER_DAY = 10
 CODES_PER_IP_PER_HOUR = 20
 SESSION_TTL_DAYS = 90
 SESSION_RENEW_AFTER_DAYS = 7
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$")
+
+
+# Dieselbe Meldung für unbekannte und für gestrichene Adressen, damit die
+# Antwort nicht verrät, ob es zu einer Adresse schon ein Konto gibt.
+NOT_ALLOWED = "Diese E-Mail-Adresse ist für die App nicht freigegeben."
 
 
 class AuthError(Exception):
@@ -140,6 +149,20 @@ def is_admin(email: str) -> bool:
     return (email or "").strip().lower() in admins
 
 
+def has_access(email: str) -> bool:
+    """Darf diese Adresse die App benutzen – auch mit bestehendem Konto?
+
+    Ist ALLOWED_EMAILS gesetzt, gilt die Liste für alle, nicht nur für neue
+    Konten: wer daraus gestrichen wird, kann sich nicht mehr anmelden, und
+    laufende Sitzungen enden beim nächsten Aufruf (siehe user_for_token).
+    Admins sind immer zugelassen, damit sich niemand mit einer unvollständigen
+    Liste selbst aussperrt. Ohne Liste entscheidet allein may_register über
+    neue Konten, bestehende bleiben zugelassen.
+    """
+    allow = _allowlist()
+    return not allow or email in allow or is_admin(email)
+
+
 def _registration_open() -> bool | None:
     """True/False bei ausdrücklicher Angabe, sonst None (= Standardverhalten)."""
     raw = os.environ.get("REGISTRATION_OPEN", "").strip().lower()
@@ -156,9 +179,8 @@ def may_register(conn: sqlite3.Connection, email: str) -> bool:
     das der Betreiberin. Weitere Personen werden per ALLOWED_EMAILS
     freigeschaltet oder mit REGISTRATION_OPEN=true generell zugelassen.
     """
-    allow = _allowlist()
-    if allow:
-        return email in allow
+    if _allowlist():
+        return has_access(email)
     explicit = _registration_open()
     if explicit is not None:
         return explicit
@@ -190,9 +212,19 @@ def create_login_code(conn: sqlite3.Connection, email: str, request_ip: str) -> 
             "Zu viele Anfragen für diese Adresse. Bitte versuch es später erneut.",
             429,
         )
+    # Ältere Zeilen löscht das Aufräumen unten, ein Tag ist also immer da.
+    per_email_day = conn.execute(
+        "SELECT COUNT(*) AS n FROM login_codes WHERE email = ? AND created_at > ?",
+        (email, _in(days=-1)),
+    ).fetchone()["n"]
+    if per_email_day >= CODES_PER_EMAIL_PER_DAY:
+        raise AuthError(
+            "Zu viele Anfragen für diese Adresse. Bitte versuch es morgen erneut.",
+            429,
+        )
 
     known = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
-    if not known and not may_register(conn, email):
+    if not has_access(email) or (not known and not may_register(conn, email)):
         # Fehlversuch mitzählen, damit die Abfrage nicht kostenlos ist.
         conn.execute(
             "INSERT INTO login_codes (email, code_hash, created_at, expires_at, "
@@ -200,9 +232,7 @@ def create_login_code(conn: sqlite3.Connection, email: str, request_ip: str) -> 
             (email, "rejected", utc_now_iso(), utc_now_iso(), utc_now_iso(), request_ip),
         )
         conn.commit()
-        raise AuthError(
-            "Für diese E-Mail-Adresse ist keine Registrierung freigegeben.", 403
-        )
+        raise AuthError(NOT_ALLOWED, 403)
 
     code = f"{secrets.randbelow(1_000_000):06d}"
     # Ältere, noch offene Codes derselben Adresse entwerten.
@@ -243,33 +273,46 @@ def verify_login_code(conn: sqlite3.Connection, email: str, code: str) -> sqlite
         raise AuthError("Kein offener Code. Fordere bitte einen neuen an.")
     if _expired(row["expires_at"]):
         raise AuthError("Der Code ist abgelaufen. Fordere bitte einen neuen an.")
-    if row["attempts"] >= CODE_MAX_ATTEMPTS:
+    # Den Versuch zuerst verbuchen, dann vergleichen – in einem einzigen
+    # UPDATE mit Bedingung. Vorher wurde erst gelesen und nur nach einem
+    # Fehlversuch hochgezählt; gleichzeitige Anfragen lasen dann alle
+    # "attempts < 5" und bekamen zusammen mehr als fünf Versuche.
+    reserved = conn.execute(
+        "UPDATE login_codes SET attempts = attempts + 1 "
+        "WHERE id = ? AND consumed_at IS NULL AND attempts < ?",
+        (row["id"], CODE_MAX_ATTEMPTS),
+    ).rowcount
+    if not reserved:
         conn.execute(
-            "UPDATE login_codes SET consumed_at = ? WHERE id = ?",
+            "UPDATE login_codes SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL",
             (utc_now_iso(), row["id"]),
         )
         conn.commit()
-        raise AuthError("Zu viele Fehlversuche. Fordere bitte einen neuen Code an.")
+        raise AuthError("Der Code ist nicht mehr gültig. Fordere bitte einen neuen an.")
+    conn.commit()
 
     if not hmac.compare_digest(row["code_hash"], _digest("code", email, code)):
-        conn.execute(
-            "UPDATE login_codes SET attempts = attempts + 1 WHERE id = ?",
-            (row["id"],),
-        )
-        conn.commit()
         raise AuthError("Der Code stimmt nicht.")
 
-    conn.execute(
-        "UPDATE login_codes SET consumed_at = ? WHERE id = ?",
+    # Nur einlösen, wenn ihn nicht gerade eine gleichzeitige Anfrage
+    # eingelöst hat – sonst gäbe ein Code zwei Sitzungen.
+    claimed = conn.execute(
+        "UPDATE login_codes SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL",
         (utc_now_iso(), row["id"]),
-    )
+    ).rowcount
+    if not claimed:
+        conn.rollback()
+        raise AuthError("Der Code wurde schon verwendet. Fordere bitte einen neuen an.")
+
+    if not has_access(email):
+        conn.commit()
+        raise AuthError(NOT_ALLOWED, 403)
 
     user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
     if not user:
         if not may_register(conn, email):
-            raise AuthError(
-                "Für diese E-Mail-Adresse ist keine Registrierung freigegeben.", 403
-            )
+            conn.commit()
+            raise AuthError(NOT_ALLOWED, 403)
         cur = conn.execute(
             "INSERT INTO users (email, created_at) VALUES (?, ?)",
             (email, utc_now_iso()),
@@ -314,6 +357,11 @@ def user_for_token(conn: sqlite3.Connection, token: str) -> sqlite3.Row | None:
         conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
         conn.commit()
         return None
+    # Aus ALLOWED_EMAILS gestrichen: alle Sitzungen des Kontos beenden, nicht
+    # erst nach Ablauf der 90 Tage.
+    if not has_access(row["email"]):
+        destroy_all_sessions(conn, row["id"])
+        return None
     # Session gleitend verlängern, aber nicht bei jedem Request schreiben.
     remaining = datetime.fromisoformat(row["expires_at"]) - datetime.now(timezone.utc)
     if remaining < timedelta(days=SESSION_TTL_DAYS - SESSION_RENEW_AFTER_DAYS):
@@ -323,6 +371,12 @@ def user_for_token(conn: sqlite3.Connection, token: str) -> sqlite3.Row | None:
         )
         conn.commit()
     return row
+
+
+def destroy_all_sessions(conn: sqlite3.Connection, user_id: int) -> None:
+    """Meldet das Konto auf allen Geräten ab."""
+    conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    conn.commit()
 
 
 def destroy_session(conn: sqlite3.Connection, token: str) -> None:
