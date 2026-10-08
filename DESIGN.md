@@ -298,10 +298,31 @@ disclaimer
 - **From 1400px:** the split becomes four to eight. Switch and range share one row,
   and the selected day's detail stands in a 320px column beside the chart, so picking
   a day never shrinks the bars. With no day selected that column is empty and 0 wide.
-- **From 1800px, larger:** both views get CSS `zoom: 1.15`, because phone-sized type
-  looks lost on a 27-inch screen. Zoom instead of per-element sizes, because every
-  measure is tuned in px for the narrow column; `app.js` measures the chart with
-  `clientWidth`/`clientHeight`, which ignore the zoom, so the bars are not scaled twice.
+- **From 1800px, three columns of cards:** with two columns a large monitor only made
+  everything wider — four entries spread over 1200px, a chart the height of the window,
+  a coach panel with 200-character lines. Instead the page becomes three columns, three,
+  four and five twelfths wide, and every group sits in a card as tall as its content:
+
+  ```
+  stat cards     |  today's list   |  history chart (fixed height)
+  coach          |                 |  selected day
+  weight         |                 |
+  disclaimer
+  ```
+
+  The left column is `.dash-today` plus the weight card in the row below it; the entry
+  list and the history span into the `1fr` row, so they do not stretch the coach's row.
+  Switch and range stack again, as they do not fit side by side in five twelfths. The
+  chart is `clamp(240px, 34vh, 380px)` tall instead of filling the window, and the
+  selected day is a section of the history card under a hairline, not a card of its
+  own. The page ends with its content rather than filling the window height.
+- **Zoom from 1800px:** both views grow as a whole — `zoom: 1.15` from 1800px, `1.4`
+  from 2400px, `2` from 3400px — because phone-sized type looks lost on a 27-inch or
+  4K screen. The steps keep the unzoomed width between about 1560 and 1920px, so the
+  grid looks the same on every large monitor. Zoom instead of per-element sizes,
+  because every measure is tuned in px for the narrow column; `app.js` measures the
+  chart with `clientWidth`/`clientHeight`, which ignore the zoom, so the bars are not
+  scaled twice.
 
 The last content row is `1fr` and absorbs the remaining window height. The chart spans
 into it and stretches (at least 220px); `app.js` reads its real size and redraws
@@ -321,7 +342,8 @@ columns, `4px` between icon buttons.
 The stat cards are a grid of two equal columns (`1fr 1fr`, 12px gap) collapsing to one
 below 420px. The edit form's three-up field grid (`1fr 1fr 1fr`) collapses to two at the
 same breakpoint. There are four breakpoints in the stylesheet: 420px for phones,
-960px and 1400px for the desktop columns, and 1800px for large screens.
+960px and 1400px for the desktop columns, 1800px for the three-column card layout,
+plus two zoom-only steps at 2400px and 3400px.
 
 ### Named Rules
 

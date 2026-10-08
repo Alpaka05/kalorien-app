@@ -769,16 +769,84 @@ a:hover { color: var(--accent); }
   }
 }
 
-/* Große Bildschirme (etwa 27 Zoll mit 2560px): Schrift und Felder in
- * Handygröße wirken dort verloren. Die Seite füllt die Breite und wird als
- * Ganzes größer.
+/* Große Bildschirme (ab 1800px, etwa 27 Zoll): Mit zwei Spalten wurde dort
+ * alles nur breiter – vier Einträge auf 1200px, ein Diagramm über die ganze
+ * Fensterhöhe, eine Einschätzung mit 200 Zeichen langen Zeilen. Stattdessen
+ * drei Spalten aus Karten, jede so hoch wie ihr Inhalt:
  *
+ *   Stand des Tages | Heutige Einträge | Verlauf
+ *   (Kacheln,       |                  | (Diagramm mit fester Höhe,
+ *    Einschätzung,  |                  |  darunter der gewählte Tag)
+ *    Gewicht)       |                  |
+ *
+ * .dash-today ist die linke Spalte, das Gewicht steht in der Zeile darunter.
+ * Einträge und Verlauf reichen bis in die 1fr-Zeile und zählen deshalb bei
+ * der Höhe der auto-Zeile nicht mit (siehe oben), sonst stünde unter der
+ * Einschätzung eine Lücke bis zum Ende der längsten Spalte. Die Gruppen und
+ * ihre Reihenfolge im HTML bleiben die der Handy-Ansicht.
+ *
+ * Dazu wird die Seite als Ganzes größer, gestuft nach Fensterbreite: Schrift
+ * und Felder in Handygröße wirken auf 27 Zoll und erst recht auf 4K verloren.
  * zoom statt eigener Größen für jedes Element: alle Maße der App sind in px
  * auf die schmale Spalte abgestimmt, zoom vergrößert sie gemeinsam und hält
  * die Verhältnisse. app.js misst das Diagramm mit clientWidth/clientHeight,
- * die ungezoomt sind. */
+ * die ungezoomt sind. Die Stufen halten die ungezoomte Breite zwischen etwa
+ * 1560 und 1920px, das Raster sieht also auf jedem Monitor gleich aus. */
 @media (min-width: 1800px) {
   .app { zoom: 1.15; }
+  /* Die Seite endet mit dem Inhalt. Bis 1800px füllt sie die Fensterhöhe,
+     weil das Diagramm mitwächst; hier hat es eine feste Höhe, und die
+     Fußnote stünde sonst allein am unteren Fensterrand. */
+  body { min-height: 0; }
+  #main-view:not([hidden]) { grid-template-rows: auto auto 1fr auto; }
+
+  .dash-entries, .dash-weight, .dash-chart {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 14px 16px;
+  }
+
+  .dash-today {
+    grid-column: 1 / 4; grid-row: 2; align-self: start;
+    display: flex; flex-direction: column; gap: 16px; margin: 0 0 16px;
+  }
+  .dash-today .cards { grid-template-columns: 1fr; gap: 16px; }
+  .dash-weight { grid-column: 1 / 4; grid-row: 3; align-self: start; }
+  .dash-weight .weight-row { margin-bottom: 0; }
+  .dash-weight .message { margin: 8px 0 0; }
+  .dash-weight .message:empty { display: none; }
+
+  .dash-entries { grid-column: 4 / 8; grid-row: 2 / 4; align-self: start; }
+  .dash-entries .entry-list { margin-bottom: 0; }
+  .dash-entries .entry-list > :last-child { border-bottom: none; padding-bottom: 0; }
+
+  /* Umschalter und Zeitraum wieder untereinander, nebeneinander passen sie
+     in die schmalere Spalte nicht. Das Diagramm bekommt eine feste Höhe statt
+     der freien Fensterhöhe, sonst wird es auf großen Monitoren zur Wand. */
+  .dash-chart {
+    grid-column: 8 / 13; grid-row: 2 / 4; align-self: start;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas: "switch" "head" "chart" "foot" "detail";
+  }
+  .metric-switch { width: auto; margin: 0 0 14px; }
+  .week-chart { height: clamp(240px, 34vh, 380px); min-height: 0; }
+  .chart-foot { margin: 0; }
+  /* Der gewählte Tag gehört zum Diagramm und steht in derselben Karte,
+     abgesetzt durch eine Linie statt als Karte in der Karte. */
+  .day-detail {
+    width: auto; max-height: none; overflow: visible;
+    margin: 14px 0 0; padding: 14px 0 0;
+    background: none; border: none; border-top: 1px solid var(--border);
+    border-radius: 0;
+  }
+
+  #main-view .footnote { grid-row: 4; }
+}
+@media (min-width: 2400px) {
+  .app { zoom: 1.4; }
+}
+@media (min-width: 3400px) {
+  .app { zoom: 2; }
 }
 
 /* Wer Bewegung abgestellt hat, bekommt dieselben Zustände ohne Übergang –
