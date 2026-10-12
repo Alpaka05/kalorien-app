@@ -1100,7 +1100,11 @@ async function renderDayDetail(reload = false) {
   list.textContent = '';
   const undo = state.undo && state.undo.entry.date === wanted ? state.undo : null;
   if (!entries.length && !undo) {
-    list.appendChild(detailEmpty('An diesem Tag wurde nichts eingetragen.'));
+    list.appendChild(detailEmpty(
+      state.summary && wanted === state.summary.today
+        ? 'Heute noch nichts eingetragen.'
+        : 'An diesem Tag wurde nichts eingetragen.'
+    ));
     return;
   }
   // Vergangene Tage lassen sich wie heute bearbeiten und löschen – wer
@@ -1784,6 +1788,13 @@ $('logout-btn').addEventListener('click', async () => {
     document.querySelector('[data-range="7"]').classList.add('active');
     setMetric(storedMetric());
     await refreshAll();
+    // Auf dem Desktop steht neben dem Diagramm von Anfang an der heutige Tag,
+    // auch leer – sonst bleibt die Spalte dort bis zum ersten Klick frei. Auf
+    // dem Handy nicht: da stünde dieselbe Liste wie unter "Heutige Einträge"
+    // gleich noch einmal.
+    if (window.matchMedia('(min-width: 960px)').matches && !state.selectedDay && state.summary) {
+      selectDay(state.summary.today);
+    }
     // Nur hier und auf "Neu einschätzen": die Einschätzung bewertet die
     // abgeschlossenen Tage und ändert sich durch neue Einträge nicht.
     loadCoach();
