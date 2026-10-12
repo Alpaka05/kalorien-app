@@ -98,6 +98,7 @@ const state = {
   presets: null,      // Schnellwahl aus /api/presets
   weights: null,      // Messungen aus /api/weights, neueste zuerst
   photo: null,        // Angehängtes Foto als verkleinerte JPEG-data:-URL
+  backfill: null,     // Tag, für den gerade nachgetragen wird (JJJJ-MM-TT)
 };
 
 // --------------------------------------------------------------------------
@@ -168,10 +169,21 @@ async function addEntry(payload, buttonEl, keepLabel = false, onSaved = null) {
       buttonEl.textContent = payload.kcal == null ? 'Schätze…' : 'Speichere…';
     }
   }
+  // Beim Nachtragen gilt der Tag für alles, was hier ankommt – Eingabefeld,
+  // Foto und Schnellwahl. Die Uhrzeit ist optional, leer nimmt der Server die
+  // jetzige.
+  const backfill = state.backfill;
+  if (backfill) {
+    payload = { ...payload, date: backfill };
+    if ($('backfill-time').value) payload.time = $('backfill-time').value;
+  }
   try {
     await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
     if (onSaved) onSaved();
+    // Den Tag aufklappen, damit der neue Eintrag sofort zu sehen ist.
+    if (backfill && state.metric !== 'weight') state.selectedDay = backfill;
     await refreshAll();
+    if (backfill) setMessage($('error-msg'), 'Nachgetragen für ' + dateLong(backfill) + '.', 'ok');
   } catch (err) {
     setMessage($('error-msg'), err.message);
   } finally {
@@ -205,6 +217,40 @@ async function handleAdd() {
     if (state.photo === photo) clearPhoto();
   });
   setPhotoBusy(false);
+  // Während der Schätzung kann das Nachtragen begonnen oder beendet worden
+  // sein; addEntry stellt die Beschriftung von vorher wieder her.
+  syncAddLabel();
+}
+
+// --------------------------------------------------------------------------
+// Nachtragen
+// --------------------------------------------------------------------------
+
+function syncAddLabel() {
+  const btn = $('add-btn');
+  if (!btn.disabled) btn.textContent = state.backfill ? 'Nachtragen' : 'Hinzufügen';
+}
+
+function startBackfill(date) {
+  const changed = state.backfill !== date;
+  state.backfill = date;
+  $('backfill-date').textContent = dateLong(date);
+  if (changed) $('backfill-time').value = '';
+  $('backfill-bar').hidden = false;
+  setMessage($('error-msg'), '');
+  syncAddLabel();
+  if (state.selectedDay) renderDayDetail();
+  // Auf dem Handy liegt das Eingabefeld weit über dem Diagramm.
+  $('backfill-bar').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  $('food-input').focus({ preventScroll: true });
+}
+
+function closeBackfill() {
+  state.backfill = null;
+  $('backfill-bar').hidden = true;
+  setMessage($('error-msg'), '');
+  syncAddLabel();
+  if (state.selectedDay) renderDayDetail();
 }
 
 // --------------------------------------------------------------------------
@@ -375,7 +421,10 @@ function buildUndoRow(entry) {
   return row;
 }
 
-function buildEntryRow(entry) {
+// Zeile und Formular stehen in der heutigen Liste und in der Karte eines
+// vergangenen Tages. rerender zeichnet die Liste neu, in der sie stehen,
+// entries ist diese Liste (für die Stelle der Rückgängig-Zeile).
+function buildEntryRow(entry, rerender = renderToday, entries = null) {
   const row = document.createElement('div');
   row.className = 'entry-row';
 
@@ -408,7 +457,7 @@ function buildEntryRow(entry) {
   edit.appendChild(icon('pencil'));
   edit.addEventListener('click', () => {
     state.editingId = entry.id;
-    renderToday();
+    rerender();
   });
 
   const del = document.createElement('button');
@@ -422,7 +471,8 @@ function buildEntryRow(entry) {
       await api('/api/entries/' + entry.id, { method: 'DELETE' });
       // Der Mülleimer liegt direkt neben dem Stift und fragt nicht nach –
       // deshalb lässt sich das Löschen an derselben Stelle zurücknehmen.
-      const index = state.today ? state.today.entries.findIndex((e) => e.id === entry.id) : 0;
+      const list = entries || (state.today ? state.today.entries : []);
+      const index = list.findIndex((e) => e.id === entry.id);
       state.undo = { entry, index: Math.max(0, index) };
       await refreshAll();
     } catch (err) {
@@ -436,7 +486,7 @@ function buildEntryRow(entry) {
   return row;
 }
 
-function buildEditForm(entry) {
+function buildEditForm(entry, rerender = renderToday) {
   const form = document.createElement('form');
   form.className = 'edit-form';
   // Die Prüfung macht der Server (mit verständlichen Meldungen). Ohne das
@@ -486,6 +536,18 @@ function buildEditForm(entry) {
   timeInput.value = entry.time;
   timeWrap.append(timeLabel, timeInput);
   grid.appendChild(timeWrap);
+  // Verschiebt den Eintrag auf einen anderen Tag, etwa wenn das Abendessen
+  // von gestern erst heute eingetragen wurde.
+  const dateWrap = document.createElement('div');
+  const dateLabel = document.createElement('label');
+  dateLabel.className = 'field-label';
+  dateLabel.textContent = 'Tag';
+  const dateInput = document.createElement('input');
+  dateInput.type = 'date';
+  dateInput.value = entry.date;
+  if (state.today) dateInput.max = state.today.date;
+  dateWrap.append(dateLabel, dateInput);
+  grid.appendChild(dateWrap);
 
   const actions = document.createElement('div');
   actions.className = 'edit-actions';
@@ -499,7 +561,7 @@ function buildEditForm(entry) {
   cancel.textContent = 'Abbrechen';
   cancel.addEventListener('click', () => {
     state.editingId = null;
-    renderToday();
+    rerender();
   });
   actions.append(save, cancel);
 
@@ -514,6 +576,7 @@ function buildEditForm(entry) {
           kcal: normalizeNumber(inputs.kcal.value),
           protein: normalizeNumber(inputs.protein.value) || null,
           time: timeInput.value,
+          date: dateInput.value || undefined,
         }),
       });
       state.editingId = null;
@@ -1001,6 +1064,12 @@ async function renderDayDetail(reload = false) {
   const wanted = state.selectedDay;
   box.hidden = false;
   $('day-detail-date').textContent = dateLong(wanted);
+  // Nachtragen nur für vergangene Tage: heute geht das über das Eingabefeld
+  // ohnehin, und für einen Tag, der schon nachgetragen wird, braucht es den
+  // Link nicht noch einmal.
+  const past = !!state.summary && wanted < state.summary.today;
+  $('day-detail-add').hidden =
+    state.metric === 'weight' || !past || state.backfill === wanted;
   if (state.metric === 'weight') {
     renderWeightDetail(wanted);
     return;
@@ -1026,8 +1095,23 @@ async function renderDayDetail(reload = false) {
   $('day-detail-total').textContent = protein ? `${fmtNum(total)} g Eiweiß` : fmtKcal(total);
   const list = $('day-detail-list');
   list.textContent = '';
-  if (!entries.length) {
+  const undo = state.undo && state.undo.entry.date === wanted ? state.undo : null;
+  if (!entries.length && !undo) {
     list.appendChild(detailEmpty('An diesem Tag wurde nichts eingetragen.'));
+    return;
+  }
+  // Vergangene Tage lassen sich wie heute bearbeiten und löschen – wer
+  // nachträgt, muss sich auch vertippen dürfen. Heute steht schon in der
+  // Liste daneben, dort bleibt es bei der knappen Übersicht.
+  if (past) {
+    const rerender = () => renderDayDetail();
+    const rows = entries.map((entry) =>
+      state.editingId === entry.id
+        ? buildEditForm(entry, rerender)
+        : buildEntryRow(entry, rerender, entries)
+    );
+    if (undo) rows.splice(Math.min(undo.index, rows.length), 0, buildUndoRow(undo.entry));
+    rows.forEach((row) => list.appendChild(row));
     return;
   }
   entries.forEach((entry) => {
@@ -1420,6 +1504,8 @@ if ('ResizeObserver' in window) {
 }
 
 $('add-btn').addEventListener('click', handleAdd);
+$('day-detail-add').addEventListener('click', () => startBackfill(state.selectedDay));
+$('backfill-close').addEventListener('click', closeBackfill);
 $('photo-btn').addEventListener('click', () => $('photo-input').click());
 $('photo-input').addEventListener('change', (e) => {
   attachPhoto(e.target.files[0]);
@@ -1453,6 +1539,7 @@ foodField.addEventListener('drop', (e) => {
 });
 $('food-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') handleAdd();
+  if (e.key === 'Escape' && state.backfill) closeBackfill();
 });
 $('weight-btn').addEventListener('click', saveWeight);
 $('weight-input').addEventListener('keydown', (e) => {

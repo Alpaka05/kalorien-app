@@ -323,6 +323,19 @@ a:hover { color: var(--accent); }
 .photo-meta { flex: 1; min-width: 0; }
 .photo-title { margin: 0; font-size: 13.5px; }
 .photo-hint { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+/* Nachtragen ist ein Modus, kein Anhang: die Leiste ist deshalb grün
+   abgesetzt, damit niemand aus Versehen das heutige Essen auf gestern bucht. */
+.backfill-bar {
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px;
+  background: var(--accent-bg); border: 1px solid var(--accent); border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+.backfill-bar[hidden] { display: none; }
+.backfill-meta { flex: 1; min-width: 0; }
+.backfill-title { margin: 0; font-size: 13.5px; }
+.backfill-title span { font-weight: 600; }
+.backfill-hint { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+.backfill-bar input[type="time"] { width: auto; flex: none; }
 .message { font-size: 13px; margin: 0 0 1rem; min-height: 16px; }
 .message.error { color: var(--danger); }
 .message.ok { color: var(--accent-dark); }
@@ -396,7 +409,7 @@ a:hover { color: var(--accent); }
 .undo-row button.link { flex-shrink: 0; font-size: 14px; }
 
 .edit-form { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); }
-.edit-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
 .edit-actions { display: flex; gap: 8px; }
 .field-label { font-size: 11.5px; color: var(--text-muted); display: block; margin-bottom: 3px; }
 
@@ -563,6 +576,11 @@ a:hover { color: var(--accent); }
 .day-detail-item { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-top: 1px solid var(--border); }
 .day-detail-item span:first-child { color: var(--text-primary); }
 .day-detail-item span:last-child { font-family: var(--mono); color: var(--text-secondary); white-space: nowrap; }
+/* Vergangene Tage zeigen dieselben Zeilen wie die heutigen Einträge, also
+   mit Bearbeiten und Löschen. Die letzte Linie schließt die Karte nicht ab. */
+.day-detail-list .entry-row:last-child, .day-detail-list .edit-form:last-child { border-bottom: none; }
+.day-detail-add { margin-top: 10px; font-size: 14px; }
+.day-detail-add[hidden] { display: none; }
 
 /* Die Einschätzung trägt ihren Status als gezeichnetes Symbol neben der
    Überschrift. Vorher war es eine 3px-Kante links – eine Farbe allein ist

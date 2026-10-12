@@ -48,6 +48,16 @@
       <!-- Ein angehängtes Foto steht über der Zeile, bis es mit dem Text
            zusammen abgeschickt wird. Gespeichert wird es nicht, nur die
            Beschreibung, die die KI daraus macht. -->
+      <!-- Nachtragen: solange die Leiste steht, zählt alles, was über das
+           Eingabefeld oder die Schnellwahl kommt, zum genannten Tag. -->
+      <div class="backfill-bar" id="backfill-bar" hidden>
+        <div class="backfill-meta">
+          <p class="backfill-title">Nachtragen für <span id="backfill-date"></span></p>
+          <p class="backfill-hint">Alles, was du jetzt einträgst, zählt zu diesem Tag.</p>
+        </div>
+        <input type="time" id="backfill-time" title="Uhrzeit (leer: jetzige Uhrzeit)" aria-label="Uhrzeit" />
+        <button class="icon-btn" id="backfill-close" title="Nachtragen beenden" aria-label="Nachtragen beenden"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
       <div class="photo-attach" id="photo-attach" hidden>
         <img class="photo-thumb" id="photo-thumb" alt="Angehängtes Foto" />
         <div class="photo-meta">
@@ -128,7 +138,7 @@
         </div>
         <div class="week-chart" id="week-chart"></div>
         <div class="chart-foot">
-          <p class="chart-scale-note" id="chart-note">Tippe auf einen Balken, um den Tag zu sehen.</p>
+          <p class="chart-scale-note" id="chart-note">Tippe auf einen Balken, um den Tag zu sehen oder etwas nachzutragen.</p>
           <span class="chart-goal" id="chart-goal" hidden></span>
         </div>
         <div class="day-detail" id="day-detail" hidden>
@@ -137,6 +147,7 @@
             <span class="day-detail-total" id="day-detail-total"></span>
           </div>
           <div class="day-detail-list" id="day-detail-list"></div>
+          <button class="link day-detail-add" id="day-detail-add" hidden>Etwas nachtragen</button>
         </div>
       </div>
 

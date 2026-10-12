@@ -27,6 +27,10 @@ von Google AI Studio kostenlos.
 - **Foto statt Text** – das Kamera-Icon im Eingabefeld öffnet Kamera oder
   Galerie; die KI erkennt das Essen, schätzt kcal und Eiweiß und schreibt eine
   kurze Beschreibung als Eintrag. Das Foto selbst wird nicht gespeichert.
+- **Nachtragen** – Tag im Diagramm antippen, „Etwas nachtragen“, und alles aus
+  Eingabefeld, Foto oder Schnellwahl zählt zu diesem Tag. Einträge vergangener
+  Tage lassen sich dort auch bearbeiten, löschen oder auf einen anderen Tag
+  verschieben.
 - **Konten mit E-Mail-Code** – mehrere Personen parallel, jede sieht nur ihre
   eigenen Daten, kein Passwort nötig
 - **Tagesziel** mit Fortschrittsbalken und „noch X kcal bis …"
