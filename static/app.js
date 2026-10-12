@@ -1385,9 +1385,37 @@ async function fetchCoach(refresh) {
   }
 }
 
+// Ein- und Ausklappen der Einschätzung. Die Wahl gehört zum Gerät, wie die des
+// Diagramms. Die Klasse sitzt an .dash-today statt an der Karte: loadCoach
+// setzt deren className bei jeder Auswertung neu, und auf dem Desktop ordnet
+// das Raster beim Einklappen auch die Kacheln daneben um.
+const COACH_COLLAPSED_KEY = 'kcal-coach-collapsed';
+
+function setCoachCollapsed(collapsed, remember = true) {
+  document.querySelector('.dash-today').classList.toggle('coach-collapsed', collapsed);
+  $('coach-toggle').setAttribute('aria-expanded', String(!collapsed));
+  if (!remember) return;
+  try {
+    if (collapsed) localStorage.setItem(COACH_COLLAPSED_KEY, '1');
+    else localStorage.removeItem(COACH_COLLAPSED_KEY);
+  } catch (err) {
+    /* ignorieren */
+  }
+}
+
+function storedCoachCollapsed() {
+  try {
+    return localStorage.getItem(COACH_COLLAPSED_KEY) === '1';
+  } catch (err) {
+    return false;
+  }
+}
+
 async function loadCoach(refresh = false) {
   const box = $('coach');
   const refreshBtn = $('coach-refresh');
+  // Beim ersten Laden ist die Karte sonst einige Sekunden lang leer.
+  if (!$('coach-headline').textContent) $('coach-headline').textContent = 'Wird ausgewertet…';
   box.hidden = false;
   refreshBtn.disabled = true;
   if (refresh) $('coach-stamp').textContent = 'Wird ausgewertet…';
@@ -1708,6 +1736,10 @@ $('weight-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') saveWeight();
 });
 $('coach-refresh').addEventListener('click', () => loadCoach(true));
+$('coach-toggle').addEventListener('click', () => {
+  setCoachCollapsed(!document.querySelector('.dash-today').classList.contains('coach-collapsed'));
+});
+setCoachCollapsed(storedCoachCollapsed(), false);
 $('chart-prev').addEventListener('click', () => shiftRange(-1));
 $('chart-next').addEventListener('click', () => shiftRange(1));
 document.querySelectorAll('[data-range]').forEach((btn) => {

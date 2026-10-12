@@ -591,7 +591,23 @@ a:hover { color: var(--accent); }
   border-radius: var(--radius-lg);
   padding: 14px 16px; margin-bottom: 2rem;
 }
-.coach-head { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 6px; }
+/* Die Kopfzeile ist zugleich der Knopf zum Ein- und Ausklappen. */
+.coach button.coach-head {
+  display: flex; align-items: flex-start; gap: 9px; margin: 0 0 6px;
+  width: 100%; height: auto; padding: 0; background: none; color: inherit;
+  font: inherit; text-align: left; white-space: normal; border-radius: 0;
+}
+.coach button.coach-head:hover:not(:disabled) { background: none; }
+.coach button.coach-head:active:not(:disabled) { transform: none; }
+.coach button.coach-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); }
+.coach-head .coach-headline { flex: 1; min-width: 0; }
+.coach-chevron { flex: none; color: var(--text-muted); display: flex; transition: transform var(--dur) var(--ease); }
+.coach-chevron svg { display: block; }
+.coach button.coach-head:hover .coach-chevron { color: var(--text-primary); }
+/* Eingeklappt bleibt nur die Überschrift stehen. */
+.coach-collapsed .coach-chevron { transform: rotate(-90deg); }
+.coach-collapsed .coach button.coach-head { margin: 0; }
+.coach-collapsed .coach-message, .coach-collapsed .coach-tips, .coach-collapsed .coach-foot { display: none; }
 .coach-icon {
   flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   width: 18px; height: 21px; color: var(--text-muted);
@@ -608,7 +624,7 @@ a:hover { color: var(--accent); }
 .coach.lose.slightly_behind .coach-icon,
 .coach.lose.behind .coach-icon { color: var(--accent); }
 .coach.error .coach-icon { color: var(--danger); }
-.coach-headline { font-size: 14.5px; font-weight: 600; margin: 0; text-wrap: balance; }
+.coach-headline { display: block; font-size: 14.5px; font-weight: 600; margin: 0; text-wrap: balance; }
 .coach-message { font-size: 13.5px; color: var(--text-secondary); margin: 0; line-height: 1.55; text-wrap: pretty; }
 .coach-tips { font-size: 13.5px; color: var(--text-secondary); margin: 10px 0 0; padding-left: 18px; line-height: 1.55; }
 .coach-tips li { margin-bottom: 3px; }
@@ -849,10 +865,24 @@ button.cal-cell:active:not(:disabled) { transform: none; }
   /* Abstände als margin statt column-gap: ohne gewählten Tag bliebe sonst
      rechts neben dem Diagramm eine leere Lücke stehen. */
   .metric-switch { margin-right: 24px; }
+  /* Die Karte füllt die Höhe neben Diagramm und Fußzeile und scrollt selbst.
+     contain: size, damit ein langer Tag nicht über die Zeilenhöhe das
+     Diagramm mitwachsen lässt. Breiter als früher (320px): vergangene Tage
+     haben Bearbeiten und Löschen in jeder Zeile, bei 320px blieben für die
+     Beschreibung nur gut 80px und jede Mahlzeit brach dreimal um. */
   .day-detail {
-    width: 320px; margin: 0 0 1rem 24px;
-    align-self: start; max-height: 100%; overflow-y: auto;
+    width: clamp(340px, 26vw, 440px); margin: 0 0 0 24px;
+    align-self: stretch; contain: size; overflow-y: auto;
   }
+}
+
+/* Eingeklappte Einschätzung bis 1800px: die beiden Kacheln stehen dann
+   nebeneinander über die volle Breite, die Einschätzung als schmale Leiste
+   darunter – statt einer einzeiligen Karte neben zwei hohen Kacheln. Ab 1800px
+   steht alles in einer Spalte, dort genügt die kürzere Karte. */
+@media (min-width: 960px) and (max-width: 1799.98px) {
+  .dash-today.coach-collapsed .cards { grid-column: 1 / 13; grid-template-columns: 1fr 1fr; }
+  .dash-today.coach-collapsed .coach { grid-column: 1 / 13; grid-row: 2; margin-top: 12px; }
 }
 
 /* Große Bildschirme (ab 1800px, etwa 27 Zoll): Mit zwei Spalten wurde dort
@@ -923,7 +953,7 @@ button.cal-cell:active:not(:disabled) { transform: none; }
   /* Der gewählte Tag gehört zum Diagramm und steht in derselben Karte,
      abgesetzt durch eine Linie statt als Karte in der Karte. */
   .day-detail {
-    width: auto; max-height: none; overflow: visible;
+    width: auto; max-height: none; overflow: visible; contain: none; align-self: auto;
     margin: 14px 0 0; padding: 14px 0 0;
     background: none; border: none; border-top: 1px solid var(--border);
     border-radius: 0;

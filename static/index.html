@@ -97,13 +97,15 @@
       </div>
 
       <div class="coach" id="coach" hidden>
-        <div class="coach-head">
+        <button type="button" class="coach-head" id="coach-toggle" aria-expanded="true"
+                aria-controls="coach-message coach-tips coach-foot" title="Einschätzung ein- oder ausklappen">
           <span class="coach-icon" id="coach-icon" aria-hidden="true"></span>
-          <p class="coach-headline" id="coach-headline"></p>
-        </div>
+          <span class="coach-headline" id="coach-headline"></span>
+          <span class="coach-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+        </button>
         <p class="coach-message" id="coach-message"></p>
         <ul class="coach-tips" id="coach-tips" hidden></ul>
-        <div class="coach-foot">
+        <div class="coach-foot" id="coach-foot">
           <span class="coach-stamp" id="coach-stamp"></span>
           <button class="link" id="coach-refresh">Neu einschätzen</button>
         </div>
