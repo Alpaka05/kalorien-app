@@ -465,6 +465,15 @@ border color (`--border` → `--border-strong`) or the surface tone, not the wid
 - **Numeric fields:** `input[type="number"]` switches to mono. The weight field is
   deliberately `type="text"` with `inputmode="decimal"` — with `type="number"`, Safari
   silently discards a comma decimal ("68,5") while still displaying it.
+- **Photo attach:** The food input carries a 36px camera icon button inside its
+  right edge (the field reserves 46px of right padding for it). It opens a plain
+  `<input type="file" accept="image/*">` without `capture`, so the phone offers
+  camera *and* gallery. An attached photo shows as a surface row above the input —
+  52px thumbnail, a short hint, a remove icon — and the camera icon turns
+  accent-dark while it is attached. While estimating, the thumbnail dims to 0.6;
+  there is no looping animation. The photo is shrunk to a 1568px JPEG in the browser,
+  sent with the text, and never stored: the entry keeps only the AI's description.
+  On the desktop an image can also be pasted into or dropped onto the field.
 
 ### Settings View
 

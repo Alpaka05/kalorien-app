@@ -4,6 +4,8 @@ Alle Daten sind pro Konto getrennt; jede API-Route filtert konsequent nach
 `user_id` aus der Session.
 """
 
+import base64
+import binascii
 import csv
 import functools
 import io
@@ -68,7 +70,16 @@ ALLOWED_RANGES = (7, 14, 30, 90)
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 app = Flask(__name__, static_folder="static", static_url_path="")
+# Ein Foto kommt als base64 im JSON. Der Browser verkleinert es vorher auf
+# ~1600px (ein paar hundert KB); die Grenze fängt nur Ausreißer ab und liegt
+# über MAX_IMAGE_BYTES, weil base64 ein Drittel größer ist als die Datei.
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 db.init_db()
+
+# Claude nimmt höchstens 5 MB je Bild an.
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
+_DATA_URL = re.compile(r"^data:(?P<type>image/[\w.+-]+);base64,(?P<data>.+)$", re.DOTALL)
 
 
 # --------------------------------------------------------------------------
@@ -116,6 +127,24 @@ def body() -> dict:
 
 def bad(message: str, status: int = 400):
     return jsonify({"error": message}), status
+
+
+def parse_image(value) -> dict:
+    """Prüft ein Foto als data:-URL und gibt es so zurück, wie ai.py es braucht.
+
+    Das Foto wird nur an die KI weitergereicht und nirgends gespeichert.
+    """
+    match = _DATA_URL.match(value) if isinstance(value, str) else None
+    if not match or match["type"] not in IMAGE_TYPES:
+        raise ValueError("Das Foto konnte nicht gelesen werden (JPEG, PNG oder WebP).")
+    data = match["data"]
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("Das Foto konnte nicht gelesen werden.") from exc
+    if len(raw) > MAX_IMAGE_BYTES:
+        raise ValueError("Das Foto ist zu groß.")
+    return {"media_type": match["type"], "data": data}
 
 
 def parse_date(value, field: str = "Datum") -> str:
@@ -324,6 +353,11 @@ def handle_unexpected(exc: Exception):
         )
         return jsonify({"error": message}), status
     return exc if hasattr(exc, "code") else ("Interner Fehler", 500)
+
+
+@app.errorhandler(413)
+def too_large(exc):
+    return bad("Das Foto ist zu groß.", 413)
 
 
 @app.after_request
@@ -637,7 +671,8 @@ def list_entries():
 def add_entry():
     payload = body()
     description = (payload.get("desc") or "").strip()
-    if not description:
+    has_image = bool(payload.get("image"))
+    if not description and not has_image:
         return bad("Bitte gib ein, was du gegessen oder getrunken hast.")
     if len(description) > 500:
         return bad("Die Beschreibung ist zu lang (maximal 500 Zeichen).")
@@ -649,7 +684,7 @@ def add_entry():
         entry_time = parse_time(payload["time"]) if payload.get("time") else local_time_hhmm()
         # Schnell-Eintrag aus der Schnellwahl: Werte sind bekannt, die KI wird
         # nicht gebraucht (spart Zeit und API-Kosten).
-        if payload.get("kcal") is not None:
+        if payload.get("kcal") is not None and not has_image:
             kcal = parse_number(payload["kcal"], "Kalorien", 0, 20000)
             protein = (
                 parse_number(payload["protein"], "Eiweiß", 0, 1000)
@@ -658,7 +693,10 @@ def add_entry():
             )
             normalized = description
         else:
-            estimate = ai.estimate_meal(description, goal_direction(g.user), ai_model(g.user))
+            image = parse_image(payload["image"]) if has_image else None
+            estimate = ai.estimate_meal(
+                description, goal_direction(g.user), ai_model(g.user), image
+            )
             kcal, protein, normalized = (
                 estimate["kcal"],
                 estimate["protein"],

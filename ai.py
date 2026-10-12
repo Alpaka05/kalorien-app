@@ -234,7 +234,8 @@ def _is_timeout(exc: Exception) -> bool:
     )
 
 
-def _build_body(prompt: str, schema: dict, max_tokens: int, thinking: str | None) -> dict:
+def _build_body(prompt: str, schema: dict, max_tokens: int, thinking: str | None,
+                image: dict | None = None) -> dict:
     generation_config: dict = {
         "responseMimeType": "application/json",
         # responseJsonSchema nimmt normales JSON Schema an und behält die
@@ -246,8 +247,12 @@ def _build_body(prompt: str, schema: dict, max_tokens: int, thinking: str | None
     }
     if thinking:
         generation_config["thinkingConfig"] = {"thinkingLevel": thinking}
+    parts: list = [{"text": prompt}]
+    if image:
+        # Bild vor dem Text, wie es auch Google für Bildfragen empfiehlt.
+        parts.insert(0, {"inlineData": {"mimeType": image["media_type"], "data": image["data"]}})
     return {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": generation_config,
     }
 
@@ -276,8 +281,18 @@ def _claude():
     return _claude_client
 
 
-def _claude_json(model: str, prompt: str, schema: dict) -> dict:
+def _claude_json(model: str, prompt: str, schema: dict, image: dict | None = None) -> dict:
     import anthropic
+
+    content: str | list = prompt
+    if image:
+        content = [
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]},
+            },
+            {"type": "text", "text": prompt},
+        ]
 
     try:
         response = _claude().messages.create(
@@ -288,7 +303,7 @@ def _claude_json(model: str, prompt: str, schema: dict) -> dict:
                 "effort": CLAUDE_EFFORT,
                 "format": {"type": "json_schema", "schema": schema},
             },
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": content}],
         )
     except anthropic.AuthenticationError as exc:
         raise AIError("Der Anthropic-API-Key wird nicht akzeptiert.") from exc
@@ -319,12 +334,12 @@ def _claude_json(model: str, prompt: str, schema: dict) -> dict:
 
 
 def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str,
-               model: str = DEFAULT_MODEL) -> dict:
+               model: str = DEFAULT_MODEL, image: dict | None = None) -> dict:
     deadline = time.monotonic() + TOTAL_DEADLINE
     if model != DEFAULT_MODEL and model_available(model):
         started = time.monotonic()
         try:
-            result = _claude_json(model, prompt, schema)
+            result = _claude_json(model, prompt, schema, image)
             log.info("Antwort von %s nach %.1f s", model, time.monotonic() - started)
             return result
         except AIError as exc:
@@ -332,17 +347,18 @@ def _json_call(prompt: str, schema: dict, max_tokens: int, thinking: str,
             log.warning("%s fehlgeschlagen (%s) – weiche auf Gemini aus", model, exc)
             if deadline - time.monotonic() < MIN_RETRY_TIME:
                 raise
-    return _gemini_json(prompt, schema, max_tokens, thinking, deadline)
+    return _gemini_json(prompt, schema, max_tokens, thinking, deadline, image)
 
 
 def _gemini_json(prompt: str, schema: dict, max_tokens: int, thinking: str,
-                 deadline: float) -> dict:
+                 deadline: float, image: dict | None = None) -> dict:
     global _thinking_enabled
     key = _api_key()
     try:
         try:
             response = _post(
-                _build_body(prompt, schema, max_tokens, thinking if _thinking_enabled else None),
+                _build_body(prompt, schema, max_tokens,
+                            thinking if _thinking_enabled else None, image),
                 key,
                 deadline,
             )
@@ -360,7 +376,7 @@ def _gemini_json(prompt: str, schema: dict, max_tokens: int, thinking: str,
                 GEMINI_MODEL, exc,
             )
             _thinking_enabled = False
-            response = _post(_build_body(prompt, schema, max_tokens, None), key, deadline)
+            response = _post(_build_body(prompt, schema, max_tokens, None, image), key, deadline)
     except _BadRequest as exc:
         log.error("Gemini lehnt die Anfrage ab (Modell %s): %s", GEMINI_MODEL, exc)
         raise AIError(
@@ -475,6 +491,26 @@ MEAL_PROMPT = (
     "oder seine Einzelteile, nicht beides. "
 )
 
+# Beim Foto ist der Text höchstens eine Ergänzung ("ohne Soße"). Die
+# Beschreibung in `normalized` wird zum Text des Eintrags, und das Foto selbst
+# wird nicht gespeichert: sie muss also allein erklären, was gegessen wurde.
+MEAL_PHOTO_PROMPT = (
+    "Schätze für die Mahlzeit auf dem Foto die Kilokalorien und das Eiweiß in "
+    "Gramm.\n\n"
+    "Gehe dabei so vor:\n"
+    "1. Erkenne alle Speisen und Getränke auf dem Foto. Ist ein "
+    "Nährwertetikett oder eine Verpackung zu sehen, nutze deren Angaben.\n"
+    "2. Schätze für jeden Bestandteil die Menge mit Einheit. Nimm Teller, "
+    "Besteck, Gläser und Hände als Größenvergleich.\n"
+    "3. Schätze kcal und Eiweiß je Bestandteil.\n"
+    "4. Nenne in `kcal` und `protein_g` die Summe der Bestandteile.\n\n"
+    "Schreib in `normalized` kurz, was gegessen wurde, mit den angenommenen "
+    "Mengen, z. B. 'Spaghetti Bolognese (~350 g) mit Parmesan'. Höchstens "
+    "etwa 100 Zeichen, ohne Einleitung wie 'Auf dem Foto'. "
+    "Ist auf dem Foto weder Essen noch ein Getränk zu erkennen, gib keine "
+    "Bestandteile und 0 kcal an. "
+)
+
 # Eine Schätzung liegt immer irgendwo daneben; die Frage ist nur, in welche
 # Richtung. Der Fehler soll dorthin fallen, wo er der Person nichts vormacht:
 # beim Zunehmen lässt eine zu hohe Schätzung das Tagesziel als erreicht
@@ -494,16 +530,27 @@ MEAL_UNCERTAINTY = {
 
 
 def estimate_meal(description: str, direction: str = "gain",
-                  model: str = DEFAULT_MODEL) -> dict:
-    """Schätzt kcal und Eiweiß für eine Freitext-Angabe."""
+                  model: str = DEFAULT_MODEL, image: dict | None = None) -> dict:
+    """Schätzt kcal und Eiweiß für eine Freitext-Angabe oder ein Foto.
+
+    `image` ist {"media_type": "image/jpeg", "data": <base64>}; die
+    Beschreibung ist dann optional und ergänzt nur, was das Foto nicht zeigt.
+    """
     uncertainty = MEAL_UNCERTAINTY.get(direction, MEAL_UNCERTAINTY["gain"])
+    if image:
+        prompt = MEAL_PHOTO_PROMPT + uncertainty
+        if description:
+            prompt += "\n\nErgänzung der Person zum Foto: " + description
+    else:
+        prompt = MEAL_PROMPT + uncertainty + "\n\nAngabe: " + description
     result = _json_call(
-        MEAL_PROMPT + uncertainty + "\n\nAngabe: " + description,
+        prompt,
         MEAL_SCHEMA,
         # Großzügig, weil Denk- und Antworttokens sich das Budget teilen.
         max_tokens=8192,
         thinking="low",
         model=model,
+        image=image,
     )
 
     # Maßgeblich ist die Summe der Bestandteile, nicht die Zahl, die das Modell
@@ -511,6 +558,8 @@ def estimate_meal(description: str, direction: str = "gain",
     # der sie entstanden ist. Weicht die eigene Summe des Modells stark ab, ist
     # das ein Hinweis auf Doppelzählung und landet im Log.
     components = [c for c in (result.get("components") or []) if isinstance(c, dict)]
+    if image and not components:
+        raise AIError("Auf dem Foto ist kein Essen zu erkennen.")
     kcal = _sum_components(components, "kcal")
     protein = _sum_components(components, "protein_g")
     stated = result.get("kcal")
@@ -529,8 +578,11 @@ def estimate_meal(description: str, direction: str = "gain",
     # Auch geschätzte Werte werden begrenzt, damit ein Ausrutscher der KI keine
     # unsinnigen Zahlen in die Statistik und in spätere Auswertungen trägt.
     valid_protein = isinstance(protein, (int, float)) and 0 <= protein <= 1000
+    fallback = description or ", ".join(
+        str(c.get("bestandteil") or "").strip() for c in components
+    ).strip(", ") or "Mahlzeit vom Foto"
     return {
-        "normalized": (result.get("normalized") or description).strip()[:300],
+        "normalized": (result.get("normalized") or fallback).strip()[:300],
         "kcal": float(kcal),
         "protein": float(protein) if valid_protein else None,
         # Noch nicht gespeichert, aber für das Log und einen späteren

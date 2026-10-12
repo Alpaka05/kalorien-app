@@ -97,6 +97,7 @@ const state = {
   undo: null,         // Zuletzt gelöschter Eintrag von heute: { entry, index }
   presets: null,      // Schnellwahl aus /api/presets
   weights: null,      // Messungen aus /api/weights, neueste zuerst
+  photo: null,        // Angehängtes Foto als verkleinerte JPEG-data:-URL
 };
 
 // --------------------------------------------------------------------------
@@ -181,7 +182,7 @@ async function addEntry(payload, buttonEl, keepLabel = false, onSaved = null) {
   }
 }
 
-function handleAdd() {
+async function handleAdd() {
   // Solange eine Schätzung läuft, ist der Knopf gesperrt – Enter im Feld
   // kommt aber an ihm vorbei. Ohne diese Abfrage speichert ein zweites Enter
   // während der Schätzung denselben Eintrag doppelt (und kostet einen
@@ -189,15 +190,95 @@ function handleAdd() {
   if ($('add-btn').disabled) return;
   const input = $('food-input');
   const desc = input.value.trim();
-  if (!desc) {
+  const photo = state.photo;
+  if (!desc && !photo) {
     setMessage($('error-msg'), 'Bitte gib ein, was du gegessen oder getrunken hast.');
     return;
   }
+  const payload = photo ? { desc, image: photo } : { desc };
+  setPhotoBusy(!!photo);
   // Nur leeren, wenn dort noch der gespeicherte Text steht – wer während der
-  // Schätzung schon weitertippt, verliert sonst das Neue.
-  addEntry({ desc }, $('add-btn'), false, () => {
+  // Schätzung schon weitertippt, verliert sonst das Neue. Schlägt die
+  // Schätzung fehl, bleibt das Foto für einen zweiten Versuch hängen.
+  await addEntry(payload, $('add-btn'), false, () => {
     if (input.value.trim() === desc) input.value = '';
+    if (state.photo === photo) clearPhoto();
   });
+  setPhotoBusy(false);
+}
+
+// --------------------------------------------------------------------------
+// Foto anhängen
+// --------------------------------------------------------------------------
+
+// Lange Kante in Pixeln. Mehr bringt der KI nichts (Claude rechnet größere
+// Bilder selbst auf etwa diese Größe herunter), und ein Handyfoto schrumpft
+// so von mehreren MB auf ein paar hundert KB.
+const PHOTO_MAX_EDGE = 1568;
+
+// Liest das Bild über ein <img>: das dreht es nach seinen EXIF-Angaben richtig
+// herum und kann in Safari auch HEIC. Das Ergebnis ist immer JPEG.
+function shrinkPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext('2d');
+      // Durchsichtige PNGs bekämen in JPEG sonst einen schwarzen Grund.
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Das Foto konnte nicht geöffnet werden.'));
+    };
+    img.src = url;
+  });
+}
+
+async function attachPhoto(file) {
+  if (!file || !file.type.startsWith('image/') || $('add-btn').disabled) return;
+  setMessage($('error-msg'), '');
+  try {
+    state.photo = await shrinkPhoto(file);
+  } catch (err) {
+    setMessage($('error-msg'), err.message);
+    return;
+  }
+  $('photo-thumb').src = state.photo;
+  $('photo-attach').hidden = false;
+  $('photo-btn').classList.add('on');
+  $('food-input').placeholder = 'Optional: z. B. ohne Soße, halbe Portion';
+  $('food-input').focus({ preventScroll: true });
+}
+
+function clearPhoto() {
+  state.photo = null;
+  $('photo-attach').hidden = true;
+  $('photo-thumb').removeAttribute('src');
+  $('photo-btn').classList.remove('on');
+  $('food-input').placeholder = 'z. B. 2 Scheiben Toast mit Butter';
+}
+
+function setPhotoBusy(busy) {
+  $('photo-attach').classList.toggle('busy', busy);
+  $('photo-title').textContent = busy ? 'Schaue mir das Foto an…' : 'Foto angehängt';
+  $('photo-hint').textContent = busy
+    ? 'Dauert meist ein paar Sekunden.'
+    : 'Schreib dazu, was man nicht sieht – oder füg es gleich hinzu.';
+  $('photo-remove').disabled = busy;
+  $('photo-btn').disabled = busy;
+}
+
+function firstImage(list) {
+  return Array.from(list || []).find((f) => f.type && f.type.startsWith('image/'));
 }
 
 // --------------------------------------------------------------------------
@@ -1339,6 +1420,37 @@ if ('ResizeObserver' in window) {
 }
 
 $('add-btn').addEventListener('click', handleAdd);
+$('photo-btn').addEventListener('click', () => $('photo-input').click());
+$('photo-input').addEventListener('change', (e) => {
+  attachPhoto(e.target.files[0]);
+  // Sonst löst dieselbe Datei beim nächsten Mal kein change mehr aus.
+  e.target.value = '';
+});
+$('photo-remove').addEventListener('click', () => {
+  clearPhoto();
+  $('food-input').focus({ preventScroll: true });
+});
+// Desktop: Bild aus der Zwischenablage einfügen oder auf das Feld ziehen.
+$('food-input').addEventListener('paste', (e) => {
+  const file = firstImage(e.clipboardData && e.clipboardData.files);
+  if (!file) return;
+  e.preventDefault();
+  attachPhoto(file);
+});
+const foodField = document.querySelector('.food-field');
+foodField.addEventListener('dragover', (e) => {
+  if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+  e.preventDefault();
+  foodField.classList.add('dragging');
+});
+foodField.addEventListener('dragleave', () => foodField.classList.remove('dragging'));
+foodField.addEventListener('drop', (e) => {
+  foodField.classList.remove('dragging');
+  const file = firstImage(e.dataTransfer.files);
+  if (!file) return;
+  e.preventDefault();
+  attachPhoto(file);
+});
 $('food-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') handleAdd();
 });
