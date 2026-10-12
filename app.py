@@ -916,6 +916,37 @@ def summary():
     )
 
 
+# Kalender: ein Jahr (53 volle Wochen) Tagessummen für die Heatmap. Nur Tage
+# mit Einträgen, jeweils mit dem Ziel, das an dem Tag galt – wie viele Wochen
+# davon zu sehen sind, entscheidet der Browser nach der Breite.
+CALENDAR_DAYS = 53 * 7
+
+
+@app.route("/api/calendar", methods=["GET"])
+@require_user
+def calendar():
+    today = user_today(g.user)
+    first = day_offset_iso(CALENDAR_DAYS - 1, today)
+    rows = g.conn.execute(
+        "SELECT entry_date, SUM(kcal) AS total, COUNT(*) AS entries FROM entries "
+        "WHERE user_id = ? AND entry_date BETWEEN ? AND ? GROUP BY entry_date "
+        "ORDER BY entry_date",
+        (g.user["id"], first, today),
+    ).fetchall()
+    goals = db.goals_by_date(g.conn, g.user["id"], [r["entry_date"] for r in rows])
+    days = [
+        {
+            "date": r["entry_date"],
+            "total": round(r["total"], 1),
+            "entries": r["entries"],
+            "kcal_goal": goals[r["entry_date"]]["kcal_goal"],
+            "goal_direction": goals[r["entry_date"]]["goal_direction"],
+        }
+        for r in rows
+    ]
+    return jsonify({"today": today, "first": first, "days": days})
+
+
 # --------------------------------------------------------------------------
 # Gewicht
 # --------------------------------------------------------------------------

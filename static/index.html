@@ -166,6 +166,20 @@
         </div>
         <p class="message" id="weight-msg"></p>
       </div>
+
+      <!-- Kalender im Stil des GitHub-Beitragsgraphen: eine Spalte je Woche,
+           Montag oben. Wie viele Wochen, hängt an der Breite (app.js). -->
+      <div class="dash-calendar">
+        <div class="section-head">
+          <p class="section-title">Kalender</p>
+          <p class="section-sub" id="cal-streak"></p>
+        </div>
+        <div class="cal-grid" id="cal-grid" role="group" aria-label="Erfasste Tage"></div>
+        <div class="cal-foot">
+          <p class="cal-stats" id="cal-stats"></p>
+          <div class="cal-legend" id="cal-legend" aria-hidden="true"></div>
+        </div>
+      </div>
     </div>
   </div>
 

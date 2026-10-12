@@ -97,6 +97,7 @@ const state = {
   undo: null,         // Zuletzt gelöschter Eintrag von heute: { entry, index }
   presets: null,      // Schnellwahl aus /api/presets
   weights: null,      // Messungen aus /api/weights, neueste zuerst
+  calendar: null,     // Tagessummen des letzten Jahres aus /api/calendar
   photo: null,        // Angehängtes Foto als verkleinerte JPEG-data:-URL
   backfill: null,     // Tag, für den gerade nachgetragen wird (JJJJ-MM-TT)
 };
@@ -838,6 +839,8 @@ function renderSummary() {
   else renderBarChart(data, geo, state.metric === 'protein');
 
   if (state.selectedDay) renderDayDetail();
+  // Der gewählte Tag ist auch im Kalender markiert.
+  renderCalendar();
 }
 
 // Kalorien und Eiweiß: dieselben Balken, nur Wert, Ziel und Einheit wechseln.
@@ -1162,6 +1165,154 @@ function detailEmpty(text) {
   return empty;
 }
 
+// --------------------------------------------------------------------------
+// Kalender
+// --------------------------------------------------------------------------
+
+// Mindestgröße einer Zelle und Abstand in px. Daraus ergibt sich, wie viele
+// Wochen in die Breite passen: auf dem Handy etwa ein halbes Jahr, in der
+// schmalen Desktop-Spalte etwas weniger, höchstens das ganze geladene Jahr.
+const CAL_CELL = 13;
+const CAL_GAP = 3;
+const CAL_LABEL = 22;
+
+async function loadCalendar() {
+  state.calendar = await api('/api/calendar');
+  renderCalendar();
+}
+
+// Stufe eines Tages. Beim Zunehmen wird es mit der Nähe zum Ziel grüner, voll
+// grün erst am Ziel. Beim Abnehmen gibt es keine Abstufung: unter der Grenze
+// ist erreicht, darüber bernsteinfarben – wie die Balken im Diagramm. Ohne
+// Ziel zeigt die Zelle nur, dass etwas erfasst wurde.
+function calLevel(day) {
+  if (!day || !day.entries) return '';
+  const goal = day.kcal_goal;
+  if (!goal) return 'l2';
+  if (day.goal_direction === 'lose') return day.total > goal ? 'over' : 'reached';
+  const share = day.total / goal;
+  if (share >= 1) return 'reached';
+  return share >= 0.75 ? 'l3' : share >= 0.5 ? 'l2' : 'l1';
+}
+
+function renderCalendar() {
+  const data = state.calendar;
+  const grid = $('cal-grid');
+  const width = grid.clientWidth;
+  if (!data || !width) return;
+  const weeks = Math.max(8, Math.min(53,
+    Math.floor((width - CAL_LABEL + CAL_GAP) / (CAL_CELL + CAL_GAP))));
+  grid.style.setProperty('--weeks', String(weeks));
+  const byDate = new Map(data.days.map((d) => [d.date, d]));
+
+  // Montag oben, die letzte Spalte ist die laufende Woche.
+  const today = new Date(data.today + 'T00:00:00');
+  const start = new Date(today);
+  start.setDate(start.getDate() - ((today.getDay() + 6) % 7) - (weeks - 1) * 7);
+
+  const cells = [];
+  const place = (el, column, row) => {
+    el.style.gridColumn = String(column);
+    el.style.gridRow = String(row);
+    cells.push(el);
+  };
+  ['Mo', '', 'Mi', '', 'Fr', '', ''].forEach((text, index) => {
+    if (!text) return;
+    const label = document.createElement('span');
+    label.className = 'cal-wd';
+    label.textContent = text;
+    place(label, 1, index + 2);
+  });
+
+  const monthLabel = (date, week) => {
+    const month = document.createElement('span');
+    month.className = 'cal-month';
+    month.textContent = date.toLocaleDateString('de-DE', { month: 'short' }).replace('.', '');
+    place(month, week + 2, 1);
+  };
+  let firstMonthWeek = null;
+  for (let week = 0; week < weeks; week += 1) {
+    for (let weekday = 0; weekday < 7; weekday += 1) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + week * 7 + weekday);
+      if (date > today) break;
+      // Monatsname über der Woche, in der der Monat beginnt.
+      if (date.getDate() === 1) {
+        monthLabel(date, week);
+        if (firstMonthWeek === null) firstMonthWeek = week;
+      }
+      const iso = isoLocal(date);
+      const day = byDate.get(iso);
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = ['cal-cell', calLevel(day),
+        iso === data.today ? 'today' : '',
+        iso === state.selectedDay ? 'selected' : ''].filter(Boolean).join(' ');
+      cell.title = `${dateLong(iso)}: ` + (day
+        ? fmtKcal(day.total) + (day.kcal_goal ? ` von ${fmtNum(day.kcal_goal)}` : '')
+        : 'nichts eingetragen');
+      cell.setAttribute('aria-label', cell.title);
+      cell.addEventListener('click', async () => {
+        await selectDay(iso);
+        // Auf dem Handy steht die Tageskarte über dem Kalender.
+        if (!$('day-detail').hidden) {
+          $('day-detail').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      });
+      place(cell, week + 2, weekday + 2);
+    }
+  }
+  // Die erste Spalte bekommt ihren angefangenen Monat nur, wenn der nächste
+  // Name nicht gleich danach folgt – sonst stünden beide übereinander.
+  if (firstMonthWeek === null || firstMonthWeek >= 3) monthLabel(start, 0);
+  grid.replaceChildren(...cells);
+
+  // Serie: Tage in Folge mit Einträgen bis heute. Ist heute noch leer, zählt
+  // die Serie bis gestern – der Tag ist ja noch nicht vorbei.
+  let streak = 0;
+  const cursor = new Date(today);
+  if (!byDate.has(data.today)) cursor.setDate(cursor.getDate() - 1);
+  while (byDate.has(isoLocal(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  $('cal-streak').textContent = streak > 1 ? `${streak} Tage in Folge erfasst` : '';
+
+  const recent = [];
+  for (let i = 0; i < 30; i += 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    recent.push(byDate.get(isoLocal(date)));
+  }
+  const logged = recent.filter(Boolean).length;
+  const reached = recent.filter((d) => calLevel(d) === 'reached').length;
+  $('cal-stats').textContent =
+    `Letzte 30 Tage: ${logged} erfasst` + (reached ? `, ${reached} im Ziel` : '');
+
+  renderCalendarLegend();
+}
+
+function renderCalendarLegend() {
+  const legend = $('cal-legend');
+  const parts = losingWeight()
+    ? [['', 'nichts'], ['reached', 'im Ziel'], ['over', 'drüber']]
+    : [[null, 'wenig'], [''], ['l1'], ['l2'], ['l3'], ['reached'], [null, 'Ziel']];
+  legend.replaceChildren(...parts.flatMap(([level, text]) => {
+    const out = [];
+    if (level !== null) {
+      const swatch = document.createElement('span');
+      swatch.className = 'cal-swatch' + (level ? ' ' + level : '');
+      out.push(swatch);
+    }
+    if (text) {
+      const label = document.createElement('span');
+      label.textContent = text;
+      out.push(label);
+    }
+    return out;
+  }));
+}
+
 function shiftRange(direction) {
   const base = new Date((state.end || state.summary.today) + 'T00:00:00');
   base.setDate(base.getDate() + direction * state.range);
@@ -1438,7 +1589,7 @@ async function refreshAll() {
   state.dayCache = null;
   // Die Schnellwahl hängt an den Einträgen: ein neuer oder korrigierter
   // Eintrag kann einen Knopf hinzufügen oder dessen Werte ändern.
-  await Promise.all([loadToday(), loadSummary(), loadWeights(), loadPresets()]);
+  await Promise.all([loadToday(), loadSummary(), loadWeights(), loadPresets(), loadCalendar()]);
 }
 
 function setRange(days) {
@@ -1501,6 +1652,17 @@ if ('ResizeObserver' in window) {
     chartSize = size;
     if (state.summary) renderSummary();
   }).observe($('week-chart'));
+}
+
+// Der Kalender zeigt so viele Wochen, wie in die Breite passen.
+let calendarWidth = 0;
+if ('ResizeObserver' in window) {
+  new ResizeObserver(([entry]) => {
+    const width = Math.round(entry.contentRect.width);
+    if (!width || width === calendarWidth) return;
+    calendarWidth = width;
+    renderCalendar();
+  }).observe($('cal-grid'));
 }
 
 $('add-btn').addEventListener('click', handleAdd);

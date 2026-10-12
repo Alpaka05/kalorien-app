@@ -618,6 +618,46 @@ a:hover { color: var(--accent); }
 .weight-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .weight-row input { flex: 1; }
 
+/* Kalender im Stil des GitHub-Beitragsgraphen. Je Woche eine Spalte, die
+   Zellen sind quadratisch und teilen sich die Breite – die Zahl der Wochen
+   setzt app.js über --weeks. Die Stufen sind derselbe Akzent in drei
+   Stärken, voll grün nur am erreichten Ziel; Bernstein wie im Diagramm für
+   einen Tag über der Grenze beim Abnehmen. */
+.dash-calendar { margin: 1.5rem 0 2rem; }
+.cal-grid {
+  display: grid; gap: 3px;
+  grid-template-columns: auto repeat(var(--weeks, 20), minmax(0, 1fr));
+}
+.cal-month, .cal-wd { font-size: 10.5px; color: var(--text-muted); line-height: 1; }
+.cal-month { white-space: nowrap; padding-bottom: 3px; }
+.cal-wd { padding-right: 4px; align-self: center; }
+/* Die Farbe steht in --fill, damit Hover sie nicht überschreibt (die Farbe
+   ist die Aussage) – nur der Rahmen zeigt den Zeiger. */
+button.cal-cell, .cal-swatch { --fill: var(--border); background: var(--fill); border-radius: 3px; }
+button.cal-cell {
+  height: auto; aspect-ratio: 1; min-width: 0; padding: 0;
+  outline: 1.5px solid transparent; outline-offset: 1px;
+  transition: outline-color var(--dur-fast) var(--ease);
+}
+.cal-grid button.cal-cell:hover:not(:disabled) { background: var(--fill); outline-color: var(--text-secondary); }
+button.cal-cell:active:not(:disabled) { transform: none; }
+.cal-cell.l1, .cal-swatch.l1 { --fill: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.cal-cell.l2, .cal-swatch.l2 { --fill: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.cal-cell.l3, .cal-swatch.l3 { --fill: color-mix(in srgb, var(--accent) 78%, var(--border)); }
+.cal-cell.reached, .cal-swatch.reached { --fill: var(--accent); }
+.cal-cell.over, .cal-swatch.over { --fill: var(--warn); }
+.cal-cell.today { outline-color: var(--text-muted); }
+.cal-grid button.cal-cell.selected { outline-color: var(--accent); }
+.cal-cell:focus-visible { outline: 2px solid var(--accent); }
+.cal-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 6px 14px; margin-top: 10px;
+}
+.cal-stats { margin: 0; font-size: 12px; color: var(--text-muted); }
+.cal-legend { display: flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--text-muted); }
+.cal-legend span:not(.cal-swatch) { margin: 0 3px; }
+.cal-swatch { display: inline-block; width: 10px; height: 10px; }
+
 /* Die Einstellungen sind eine eigene Ansicht in derselben Spalte, kein
    Dialog: sie ersetzen die Hauptansicht, also stehen sie auf demselben Grund,
    ohne Schleier, Rahmen und Schatten. Der Kopf trägt den Zurück-Pfeil vor der
@@ -706,7 +746,7 @@ a:hover { color: var(--accent); }
   #main-view:not([hidden]) {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    grid-template-rows: auto auto auto 1fr auto;
+    grid-template-rows: auto auto auto auto 1fr auto;
     column-gap: 24px;
     align-items: start;
   }
@@ -761,13 +801,14 @@ a:hover { color: var(--accent); }
 
   .dash-entries { grid-column: 1 / 6; grid-row: 3; }
   .dash-weight { grid-column: 1 / 6; grid-row: 4; }
+  .dash-calendar { grid-column: 1 / 6; grid-row: 5; align-self: start; margin: 1rem 0 1.5rem; }
   .dash-weight .section-head { flex-wrap: wrap; }
 
   /* Verlauf: Umschalter, Zeitraum, darunter das Diagramm, das die freie Höhe
      füllt, und der gewählte Tag. Bis 1400px ist die Spalte so schmal, dass
      Umschalter und Zeitraum wie auf dem Handy untereinander stehen. */
   .dash-chart {
-    grid-column: 6 / 13; grid-row: 3 / 5; align-self: stretch;
+    grid-column: 6 / 13; grid-row: 3 / 6; align-self: stretch;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(220px, 1fr) auto auto;
@@ -783,7 +824,7 @@ a:hover { color: var(--accent); }
   .day-detail { grid-area: detail; margin-bottom: 1rem; }
 
   #main-view .footnote {
-    grid-column: 1 / 13; grid-row: 5;
+    grid-column: 1 / 13; grid-row: 6;
     margin: 0; padding-top: 1rem;
   }
 }
@@ -794,7 +835,7 @@ a:hover { color: var(--accent); }
    damit das Diagramm beim Antippen eines Tages nicht schrumpft. Ist kein Tag
    gewählt, ist die Spalte leer und 0 breit. */
 @media (min-width: 1400px) {
-  .dash-today .cards, .dash-entries, .dash-weight { grid-column: 1 / 5; }
+  .dash-today .cards, .dash-entries, .dash-weight, .dash-calendar { grid-column: 1 / 5; }
   .dash-today .coach { grid-column: 5 / 13; }
   .dash-chart {
     grid-column: 5 / 13;
@@ -822,9 +863,11 @@ a:hover { color: var(--accent); }
  *   Stand des Tages | Heutige Einträge | Verlauf
  *   (Kacheln,       |                  | (Diagramm mit fester Höhe,
  *    Einschätzung,  |                  |  darunter der gewählte Tag)
- *    Gewicht)       |                  |
+ *    Gewicht,       |                  |
+ *    Kalender)      |                  |
  *
- * .dash-today ist die linke Spalte, das Gewicht steht in der Zeile darunter.
+ * .dash-today ist die linke Spalte, Gewicht und Kalender stehen in den
+ * Zeilen darunter.
  * Einträge und Verlauf reichen bis in die 1fr-Zeile und zählen deshalb bei
  * der Höhe der auto-Zeile nicht mit (siehe oben), sonst stünde unter der
  * Einschätzung eine Lücke bis zum Ende der längsten Spalte. Die Gruppen und
@@ -843,9 +886,9 @@ a:hover { color: var(--accent); }
      weil das Diagramm mitwächst; hier hat es eine feste Höhe, und die
      Fußnote stünde sonst allein am unteren Fensterrand. */
   body { min-height: 0; }
-  #main-view:not([hidden]) { grid-template-rows: auto auto 1fr auto; }
+  #main-view:not([hidden]) { grid-template-rows: auto auto auto 1fr auto; }
 
-  .dash-entries, .dash-weight, .dash-chart {
+  .dash-entries, .dash-weight, .dash-chart, .dash-calendar {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius-lg); padding: 14px 16px;
   }
@@ -859,8 +902,9 @@ a:hover { color: var(--accent); }
   .dash-weight .weight-row { margin-bottom: 0; }
   .dash-weight .message { margin: 8px 0 0; }
   .dash-weight .message:empty { display: none; }
+  .dash-calendar { grid-column: 1 / 4; grid-row: 4; align-self: start; margin: 16px 0 0; }
 
-  .dash-entries { grid-column: 4 / 8; grid-row: 2 / 4; align-self: start; }
+  .dash-entries { grid-column: 4 / 8; grid-row: 2 / 5; align-self: start; }
   .dash-entries .entry-list { margin-bottom: 0; }
   .dash-entries .entry-list > :last-child { border-bottom: none; padding-bottom: 0; }
 
@@ -868,7 +912,7 @@ a:hover { color: var(--accent); }
      in die schmalere Spalte nicht. Das Diagramm bekommt eine feste Höhe statt
      der freien Fensterhöhe, sonst wird es auf großen Monitoren zur Wand. */
   .dash-chart {
-    grid-column: 8 / 13; grid-row: 2 / 4; align-self: start;
+    grid-column: 8 / 13; grid-row: 2 / 5; align-self: start;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto auto auto;
     grid-template-areas: "switch" "head" "chart" "foot" "detail";
@@ -885,7 +929,7 @@ a:hover { color: var(--accent); }
     border-radius: 0;
   }
 
-  #main-view .footnote { grid-row: 4; }
+  #main-view .footnote { grid-row: 5; }
 }
 @media (min-width: 2400px) {
   .app { zoom: 1.4; }
