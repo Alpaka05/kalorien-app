@@ -465,6 +465,12 @@ border color (`--border` → `--border-strong`) or the surface tone, not the wid
 - **Numeric fields:** `input[type="number"]` switches to mono. The weight field is
   deliberately `type="text"` with `inputmode="decimal"` — with `type="number"`, Safari
   silently discards a comma decimal ("68,5") while still displaying it.
+- **Backfill bar:** Logging for a past day is a mode, not an attachment. It shows
+  as a row above the input in `--accent-bg` with an `--accent` border (the one place
+  a whole row is tinted, so nobody books today's lunch on yesterday by accident):
+  "Nachtragen für <day>", an optional time field and a close icon. The add button
+  reads "Nachtragen" while it is active. It is started from "Etwas nachtragen" in a
+  past day's detail card and ends with the close icon or Escape.
 - **Photo attach:** The food input carries a 36px camera icon button inside its
   right edge (the field reserves 46px of right padding for it). It opens a plain
   `<input type="file" accept="image/*">` without `capture`, so the phone offers

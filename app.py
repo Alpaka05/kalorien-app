@@ -266,6 +266,14 @@ def user_today(user) -> str:
     return logical_today(day_start(user))
 
 
+def parse_entry_date(value) -> str:
+    """Datum eines Eintrags: nachtragen ja, vorausbuchen nein."""
+    entry_date = parse_date(value)
+    if entry_date > user_today(g.user):
+        raise ValueError("Einträge für künftige Tage gehen nicht.")
+    return entry_date
+
+
 def entry_json(row) -> dict:
     return {
         "id": row["id"],
@@ -679,7 +687,7 @@ def add_entry():
 
     try:
         entry_date = (
-            parse_date(payload["date"]) if payload.get("date") else user_today(g.user)
+            parse_entry_date(payload["date"]) if payload.get("date") else user_today(g.user)
         )
         entry_time = parse_time(payload["time"]) if payload.get("time") else local_time_hhmm()
         # Schnell-Eintrag aus der Schnellwahl: Werte sind bekannt, die KI wird
@@ -801,7 +809,7 @@ def update_entry(entry_id: int):
             values.append(parse_time(payload["time"]))
         if "date" in payload:
             fields.append("entry_date = ?")
-            values.append(parse_date(payload["date"]))
+            values.append(parse_entry_date(payload["date"]))
     except ValueError as exc:
         return bad(str(exc))
     if not fields:
