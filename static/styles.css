@@ -296,6 +296,33 @@ a:hover { color: var(--accent); }
 
 .input-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .input-row input[type="text"] { flex: 1; }
+/* Das Kamera-Icon sitzt im Eingabefeld, rechts. Das Feld bekommt dafür
+   rechts Platz, damit langer Text nicht unter dem Icon verschwindet. */
+.food-field { position: relative; flex: 1; min-width: 0; display: flex; }
+.food-field input[type="text"] { padding-right: 46px; }
+.food-field button.photo-btn {
+  position: absolute; right: 6px; top: 50%; margin-top: -18px;
+  width: 36px; height: 36px;
+}
+.food-field button.photo-btn.on { color: var(--accent-dark); }
+/* Datei über die Eingabe gezogen (Desktop). */
+.food-field.dragging input[type="text"] { border-color: var(--accent); box-shadow: var(--ring); background: var(--accent-bg); }
+
+.photo-attach {
+  display: flex; align-items: center; gap: 12px; padding: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+.photo-attach[hidden] { display: none; }
+.photo-thumb {
+  width: 52px; height: 52px; flex: none; object-fit: cover;
+  border-radius: var(--radius-sm); background: var(--border);
+  transition: opacity var(--dur) var(--ease);
+}
+.photo-attach.busy .photo-thumb { opacity: 0.6; }
+.photo-meta { flex: 1; min-width: 0; }
+.photo-title { margin: 0; font-size: 13.5px; }
+.photo-hint { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
 .message { font-size: 13px; margin: 0 0 1rem; min-height: 16px; }
 .message.error { color: var(--danger); }
 .message.ok { color: var(--accent-dark); }
@@ -688,9 +715,9 @@ a:hover { color: var(--accent); }
   /* Die Hauptsache der Seite, also etwas größer als die übrigen Felder. */
   .dash-input .input-row { margin-bottom: 10px; }
   .dash-input .input-row input[type="text"],
-  .dash-input .input-row button { height: 52px; }
-  .dash-input .input-row input[type="text"] { font-size: 16px; padding: 0 18px; }
-  .dash-input .input-row button { padding: 0 22px; }
+  .dash-input .input-row > button { height: 52px; }
+  .dash-input .input-row input[type="text"] { font-size: 16px; padding: 0 50px 0 18px; }
+  .dash-input .input-row > button { padding: 0 22px; }
   .dash-input .chips { justify-content: center; margin-bottom: 0; }
   .dash-input .message { text-align: center; margin: 6px 0 0; }
 

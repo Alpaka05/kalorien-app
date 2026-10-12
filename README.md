@@ -24,6 +24,9 @@ von Google AI Studio kostenlos.
 
 - **Freitext-Eingabe** – „2 Scheiben Toast mit Butter" reicht, kcal und Eiweiß
   werden geschätzt und lassen sich nachträglich korrigieren
+- **Foto statt Text** – das Kamera-Icon im Eingabefeld öffnet Kamera oder
+  Galerie; die KI erkennt das Essen, schätzt kcal und Eiweiß und schreibt eine
+  kurze Beschreibung als Eintrag. Das Foto selbst wird nicht gespeichert.
 - **Konten mit E-Mail-Code** – mehrere Personen parallel, jede sieht nur ihre
   eigenen Daten, kein Passwort nötig
 - **Tagesziel** mit Fortschrittsbalken und „noch X kcal bis …"
