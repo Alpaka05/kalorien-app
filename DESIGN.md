@@ -130,8 +130,9 @@ This is bookkeeping of a body without the coldness that usually comes with it.
 Surfaces are warm — a cream paper ground (#FAF8F3), a dark mode tinted brown rather
 than black. Numbers are monospaced and exact. Sans reads, mono counts.
 
-On a phone the interface is one 560px column with no navigation and no second place to
-look. It is used one-handed, seconds after eating. On a desktop the same groups spread
+On a phone each area is one 560px column, and a bar at the bottom edge switches between
+the three areas: Kalorien, Ziele (goals) and Einstellungen. The calorie area is the one
+the app opens on; it is used one-handed, seconds after eating. On a desktop the same groups spread
 across the width instead of leaving it empty. Estimates read as estimates and
 stay correctable. The page does not rush, congratulate, or celebrate.
 
@@ -146,9 +147,11 @@ consumer-app maximalism.
 - One accent — a desaturated garden green — carrying every affirmative signal.
 - Monospace for every comparable number; system sans for all prose.
 - A single 560px column on phones and tablets, the same groups in two or three columns
-  on a desktop; no navigation, and settings replace the page as a view of their own.
+  on a desktop; three areas (Kalorien · Ziele · Einstellungen) behind a bottom bar on
+  the phone and a switch in the header on the desktop.
 - Hairline 1px borders and tonal layering; no shadows, because nothing floats.
-- Motion as response, not animation: one authored moment, everything else under 200ms.
+- Motion as response, not animation: a few authored moments (goal bar, streak bar,
+  confetti for a finished week or month), everything else under 200ms.
 
 ## Colors
 
@@ -173,6 +176,12 @@ and an amber for caution.
 - **Muted Amber** (`#976927` light, `#D2A25C` dark): Caution, not alarm. Marks a goal
   bar pushed past target, history bars over the ceiling in losing mode, and "warn"
   notes. Paired with **Amber Wash** (`#F7EFE0` / `#332A1B`).
+
+- **Ember** (`#CF6A26` light, `#EE9550` dark): Streaks in the goals area only — the
+  flame, the streak number and the bar to the next milestone. `--ember-dark`
+  (`#A0501A` / `#F5B27A`) carries small text, `--ember-bg` (`#FBEDE1` / `#3A2618`) the
+  flame tile. Approved as the one exception to "no second accent": it never marks a
+  met day (that stays green) and never appears in the calorie area.
 
 ### Tertiary
 
@@ -269,7 +278,7 @@ network round trip on the exact interaction that must feel instant.
 ## Layout
 
 Below 960px: a single centered column, `max-width: 560px`, with `2rem 1.25rem 4rem` of
-body padding — one destination, no navigation, no sidebar, no tabs. The login page uses
+body padding plus room for the bottom bar — no sidebar, one bar of three areas. The login page uses
 a narrower 380px column offset `8vh` from the top; the settings view keeps the 560px
 column at every width, because a form only gets harder to read when its fields grow.
 
@@ -347,13 +356,25 @@ plus two zoom-only steps at 2400px and 3400px.
 
 ### Named Rules
 
-**The One Column Rule.** On phones and tablets everything lives in one 560px column
-in a fixed vertical order: input, quick chips, stats, coach, today's entries, history
-chart, weight, disclaimer. The whole interface is meant to be thumbed through in one
-scroll. The desktop columns redistribute these same groups and keep the order inside
-each group; they never add a sidebar, a tab bar, navigation, or content that exists only
-on the desktop. The one exception is the logo beside the title, which is branding, not
-content.
+**The One Column Rule.** On phones and tablets every area lives in one 560px column.
+The calorie area keeps a fixed vertical order: input, quick chips, stats, coach, today's
+entries, history chart, weight, disclaimer — meant to be thumbed through in one scroll.
+The desktop columns redistribute these same groups and keep the order inside each
+group; they never add a sidebar or content that exists only on the desktop. The
+exceptions are the logo beside the title, which is branding, and the area switch, which
+moves from the bottom bar into the header.
+
+**The Area Bar.** Three areas, no more: Kalorien, Ziele, Einstellungen. On the phone a
+fixed bar at the bottom (icon over label, the active one in a Garden Wash pill, hidden
+while a field has focus so it never covers the keyboard); from 960px a switch in the
+header styled like the metric switch, with Einstellungen as an icon only. On the
+desktop the header never moves between areas: every area uses the main view's
+twelve-column header row with the same brand block (logo, title, tagline) in columns
+1–3 and the switch in 10–12; only the content below narrows to its own column. Each
+tab label reserves the width of its bold form, and the scrollbar gutter is always
+kept, so neither the active tab nor a scrolling page shifts the switch. A small ink
+badge on Ziele counts today's open daily goals. Every level below an area (a goal, the
+goal form) is a history entry, so the back gesture walks back and finally to Kalorien.
 
 **The 16px Zoom Guard.** On touch screens (`pointer: coarse`) and below 420px every
 form field goes to 16px. Anything smaller makes iOS Safari zoom into the page on tap
@@ -428,9 +449,7 @@ border color (`--border` → `--border-strong`) or the surface tone, not the wid
   white surface with primary text. Its `.active` state (used by the 7/14/30 range
   toggles) fills with Garden Wash and switches border and text to accent.
 - **Icon:** 32px square, transparent, muted text, 6px radius, hovering to Garden Wash.
-  A `.danger` modifier hovers to Brick Wash instead. The settings trigger draws its
-  three lines from one element plus two pseudo-elements, using `currentColor` so it
-  inherits the hover state for free.
+  A `.danger` modifier hovers to Brick Wash instead.
 - **Link:** Height-free, underlined, 13px, Deep Garden Green — used for "Neu
   einschätzen", logout, and CSV export.
 
@@ -483,16 +502,15 @@ border color (`--border` → `--border-strong`) or the surface tone, not the wid
 
 ### Settings View
 
-- **Style:** Not an overlay but a place you move to. The menu button swaps the whole
-  main view for the settings view in a 560px column, on the same page ground,
-  with no scrim, border, or shadow. It always opens scrolled to the top; going back
-  restores the main view's scroll position.
-- **Head:** A back-arrow icon button in front of a 22px display heading
-  "Einstellungen", with the same `1.75rem` gap to the content as the main subtitle.
-- **Navigation:** Opening pushes a history entry, so the phone's back gesture and the
-  browser's back button return to the main view instead of leaving the app. The back
-  arrow, "Abbrechen", Escape, and a successful save all go back the same way. A reload
-  while the settings are open keeps them open.
+- **Style:** An area of its own, reached from the area bar, in a 560px column on the
+  same page ground with no scrim, border, or shadow. It always opens scrolled to the
+  top; the calorie area keeps its scroll position.
+- **Head:** A 22px display heading "Einstellungen", with the same `1.75rem` gap to the
+  content as the main subtitle.
+- **Navigation:** Opening pushes a history entry, so the phone's back gesture returns
+  to Kalorien instead of leaving the app. "Abbrechen" and Escape discard the fields and
+  go back; a successful save stays and confirms with "Gespeichert.". A reload keeps the
+  area open.
 - **Structure:** Stacked 14px-spaced fields each with a label and an optional 12px
   muted hint, a message line, two equal-width actions, then a hairline divider and a
   column of link-style secondary actions.
@@ -569,6 +587,43 @@ read across all three charts, and the choice is remembered per device in
   legend shows the change across the range, the detail the previous measurement and
   the difference.
 
+### Goals (Ziele)
+
+Something done `n`× per day, week (Monday to Sunday) or month. A period counts as met
+when enough entries fall into it; week and month goals count each day at most once.
+The streak counts met periods in a row — the running period never breaks it, it only
+adds once met.
+
+- **Card:** an icon tile, name and frequency, a 44px round check-in button on the right
+  (plus at rest, filled green with a check once today is entered; hovering turns a
+  checked button solid brick with a cross and a click takes today's entry back out —
+  on touch the first tap arms it, the second removes; right after checking in it stays
+  green until the pointer has left it, so a double click cannot undo), the running period
+  as one segment per unit in green, and a streak row under a hairline: ember flame,
+  number in mono, and the last periods as 9px squares (the running one outlined).
+- **Adding:** one 44px square plus in the page head, always. With no goals yet the
+  six suggestions fill the card grid as dashed tiles (icon tile dashed too), each
+  opening the form already filled in. Their plus is small and borderless so it never
+  reads as the round check-in button; hover draws the border in Quiet Garden Green
+  over a Garden Wash fill. Once a goal exists the suggestions live only as chips in
+  the form.
+- **Streak card:** a 48px flame tile in Ember Wash, the streak as the largest number
+  on the page (34px mono, ember), the record on the right, then one continuous ember
+  bar to the next milestone (days 3·7·14·30·60·100·180·365, weeks 4·8·12·26·52, months
+  3·6·12·24). The running period flows into the bar proportionally, so every check-in
+  moves it; the flag chip at its end fills when a milestone is reached. Below, the
+  running period as pills labelled with the day (or time) of each entry. The bar's
+  gloss stripe is the one concession to Duolingo.
+- **History:** a GitHub-style grid, one column per week, Monday on top, as many weeks as
+  fit. Green means entered (half green: part of a multi-per-day goal); weekly goals add
+  a 4px Deep Garden Green stroke under each week that was met. Tapping a day opens a
+  small panel to back-fill or delete.
+- **Celebration:** the flame hops and the number rolls in on every completed period.
+  Completing a week or month additionally throws confetti from the bottom edge of the
+  screen (ember, green, gold; about two seconds, pointer-transparent canvas). Daily goals
+  get no confetti — it would turn into daily noise. Reduced motion shows the new state
+  only.
+
 ### Icons
 
 Every icon is drawn, never typed. All paths live in one `ICON` map in `app.js` and render
@@ -616,8 +671,9 @@ opening a dialog, so a correction never leaves the list.
   system, and they are the cheapest signal that a page was built rather than assembled.
 - **Do** give every comparable figure `font-variant-numeric: tabular-nums`, so a column
   of numbers does not shift width when a value changes.
-- **Do** keep motion as response: state feedback at 120–180ms, and exactly one authored
-  moment — the goal bar advancing over 620ms on an exponential ease-out. Honor
+- **Do** keep motion as response: state feedback at 120–180ms, and only a few authored
+  moments — the goal bar and the streak bar advancing over 620ms on an exponential
+  ease-out, and the confetti for a finished week or month. Honor
   `prefers-reduced-motion`.
 
 ### Don't:
@@ -629,11 +685,11 @@ opening a dialog, so a correction never leaves the list.
   system preference to a literal `data-theme` before first paint, so there is exactly
   one dark block and one unambiguous state — a media query would reintroduce the
   mixed state that was deliberately removed.
-- **Don't** introduce a second accent hue. Amber and brick are reserved for caution
-  and destruction; a fourth hue would break the Quiet Accent Rule.
-- **Don't** widen the container past 560px below 960px, and never add a sidebar, a tab
-  bar, or desktop-only content (the header logo is the one piece of desktop-only
-  branding).
+- **Don't** introduce another accent hue. Amber and brick are reserved for caution
+  and destruction, ember for streaks; a fifth hue would break the Quiet Accent Rule.
+- **Don't** widen the container past 560px below 960px, and never add a sidebar, a
+  fourth area, or desktop-only content (the header logo is the one piece of
+  desktop-only branding).
 - **Don't** use accent green as a decorative tint on surfaces, headings, or borders
   that carry no affirmative meaning.
 - **Don't** add another breakpoint casually. The system has four (420px for phones,

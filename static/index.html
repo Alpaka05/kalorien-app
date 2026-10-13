@@ -34,9 +34,14 @@
         <p class="subtitle">Sag einfach, was du gegessen oder getrunken hast.</p>
       </div>
     </div>
+    <!-- Auf dem Desktop steht hier die Bereichsleiste (app.js setzt sie ein),
+         auf dem Handy liegt sie unten am Bildschirmrand. -->
     <div class="topbar-actions">
-      <button class="icon-btn menu-btn" id="settings-btn" title="Einstellungen"
-              aria-label="Einstellungen"><span class="menu-lines" aria-hidden="true"></span></button>
+      <nav class="tabbar" id="tabbar" aria-label="Bereiche">
+        <button type="button" class="tab" data-tab="kcal"><span class="tab-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0z"/><path d="M9.5 3.5c-.9 1.2.9 2.3 0 3.8M14 3.5c-.9 1.2.9 2.3 0 3.8"/></svg></span><span class="tab-label" data-label="Kalorien">Kalorien</span></button>
+        <button type="button" class="tab" data-tab="goals"><span class="tab-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3"/></svg></span><span class="tab-label" data-label="Ziele">Ziele</span><span class="tab-badge" id="goals-badge" hidden></span></button>
+        <button type="button" class="tab" data-tab="settings" title="Einstellungen"><span class="tab-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></span><span class="tab-label" data-label="Einstellungen">Einstellungen</span></button>
+      </nav>
     </div>
   </div>
 
@@ -172,12 +177,123 @@
   <p class="footnote">Kalorienangaben sind Schätzungen auf Basis üblicher Portionsgrößen, keine exakte Nährwertanalyse. Deine Daten liegen auf deinem eigenen Server und sind nur mit deinem Konto sichtbar.</p>
 </div>
 
-<!-- Die Einstellungen ersetzen die Hauptansicht, statt als Dialog darüber zu
-     liegen: eine eigene Seite in derselben Spalte, mit Zurück-Pfeil. -->
+<!-- Kopf der übrigen Bereiche auf dem Desktop: eine genaue Kopie des Kopfs
+     der Hauptansicht (Logo, Titel, Unterzeile links, Bereichsleiste rechts im
+     selben Raster), damit beim Wechsel zwischen den Bereichen nichts springt.
+     app.js hängt ihn in die jeweils sichtbare Ansicht. -->
+<div class="appbar" id="appbar">
+  <div class="brand">
+    <img class="brand-logo" src="/logo-96.png" width="48" height="48" alt="" />
+    <div>
+      <p class="brand-title">Kalorien-Tagebuch</p>
+      <p class="subtitle">Sag einfach, was du gegessen oder getrunken hast.</p>
+    </div>
+  </div>
+  <div class="appbar-nav"></div>
+</div>
+
+<!-- Ziele: Übersicht, ein einzelnes Ziel, Anlegen und Bearbeiten. Die Inhalte
+     baut goals.js. -->
+<div class="app goals-page" id="goals-view" hidden>
+  <div class="page-top">
+    <div>
+      <h1 tabindex="-1">Ziele</h1>
+      <p class="subtitle" id="goals-sub"></p>
+    </div>
+    <button class="icon-btn box-btn" id="goal-new" title="Neues Ziel" aria-label="Neues Ziel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+  <p class="message error" id="goals-msg"></p>
+  <div class="habit-list" id="habit-list"></div>
+</div>
+
+<div class="app goal-page" id="goal-view" hidden>
+  <div class="page-head">
+    <button class="icon-btn" id="goal-back" title="Zurück" aria-label="Zurück"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg></button>
+    <h1 id="goal-title" tabindex="-1"></h1>
+    <button class="icon-btn" id="goal-edit" title="Ziel bearbeiten" aria-label="Ziel bearbeiten"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14.5 7.5l2 2"/></svg></button>
+  </div>
+  <p class="goal-sub" id="goal-sub"></p>
+  <p class="message error" id="goal-msg"></p>
+  <div class="goal-columns">
+    <div class="card streak-card" id="goal-streak"></div>
+    <div class="goal-side">
+      <div class="card heat-card">
+        <div class="section-head">
+          <p class="section-title" id="heat-title">Verlauf</p>
+          <div class="chart-nav">
+            <button class="icon-btn" id="heat-prev" title="Früher" aria-label="Früherer Zeitraum"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+            <button class="icon-btn" id="heat-next" title="Später" aria-label="Späterer Zeitraum"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+          </div>
+        </div>
+        <div class="habit-heat" id="habit-heat" role="group" aria-label="Eingetragene Tage"></div>
+        <div class="heat-foot" id="heat-foot"></div>
+        <!-- Ein Tag zum Nachtragen oder Löschen: über "Anderen Tag nachtragen"
+             oder durch Antippen eines Kästchens. -->
+        <div class="heat-day" id="heat-day" hidden>
+          <div class="heat-day-head">
+            <label class="field-label" for="heat-day-input">Tag</label>
+            <div class="heat-day-row">
+              <input type="date" id="heat-day-input" />
+              <button class="small" id="heat-day-add">Eintragen</button>
+            </div>
+          </div>
+          <div class="heat-day-list" id="heat-day-list"></div>
+          <p class="message" id="heat-day-msg"></p>
+        </div>
+      </div>
+      <div class="habit-stats" id="habit-stats"></div>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="goal-form-view" hidden>
+  <div class="page-head">
+    <button class="icon-btn" id="goal-form-back" title="Zurück" aria-label="Zurück"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg></button>
+    <h1 id="goal-form-title" tabindex="-1">Neues Ziel</h1>
+  </div>
+  <div class="settings-field">
+    <label class="field-label" for="goal-name-input">Was willst du schaffen?</label>
+    <input type="text" id="goal-name-input" maxlength="60" autocomplete="off" placeholder="z. B. Ins Gym gehen" />
+    <div class="chips goal-suggest" id="goal-suggest"></div>
+  </div>
+  <div class="settings-field">
+    <span class="field-label" id="goal-freq-label">Wie oft?</span>
+    <div class="stepper">
+      <button type="button" class="ghost stepper-btn" id="goal-target-minus" aria-label="Seltener"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <span class="stepper-value" id="goal-target-value" aria-live="polite">3</span>
+      <button type="button" class="ghost stepper-btn" id="goal-target-plus" aria-label="Öfter"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <span class="stepper-unit">mal pro …</span>
+    </div>
+    <div class="metric-switch period-switch" role="group" aria-labelledby="goal-freq-label">
+      <button type="button" data-period="day" aria-pressed="false">Tag</button>
+      <button type="button" data-period="week" aria-pressed="true">Woche</button>
+      <button type="button" data-period="month" aria-pressed="false">Monat</button>
+    </div>
+    <p class="goal-explain" id="goal-explain"></p>
+  </div>
+  <div class="settings-field">
+    <span class="field-label" id="goal-icon-label">Symbol</span>
+    <div class="icon-grid" id="goal-icons" role="radiogroup" aria-labelledby="goal-icon-label"></div>
+  </div>
+  <p class="message" id="goal-form-msg"></p>
+  <div class="settings-actions">
+    <button id="goal-save">Ziel anlegen</button>
+    <button class="ghost" id="goal-cancel">Abbrechen</button>
+  </div>
+  <div id="goal-danger" hidden>
+    <hr class="settings-divider" />
+    <div class="settings-links">
+      <button class="link danger-link" id="goal-delete">Ziel löschen</button>
+      <span class="settings-hint" id="goal-delete-hint">Löscht das Ziel mit allen Einträgen.</span>
+    </div>
+  </div>
+</div>
+
+<!-- Die Einstellungen sind ein eigener Bereich, keine Ebene über der
+     Hauptansicht: eine eigene Seite in derselben Spalte. -->
 <div class="app" id="settings-view" hidden>
   <div class="page-head">
-    <button class="icon-btn" id="settings-back" title="Zurück" aria-label="Zurück"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg></button>
-    <h1 id="settings-title">Einstellungen</h1>
+    <h1 id="settings-title" tabindex="-1">Einstellungen</h1>
   </div>
   <div class="settings-field">
     <label class="field-label" for="goal-direction-input">Was willst du erreichen?</label>
@@ -242,5 +358,6 @@
 </div>
 
 <script src="/app.js?v=__ASSET_V__"></script>
+<script src="/goals.js?v=__ASSET_V__"></script>
 </body>
 </html>

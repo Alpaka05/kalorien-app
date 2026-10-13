@@ -81,7 +81,8 @@ and manually refreshable; a 7/14/30-day history chart that pages
 arbitrarily far back, with per-day detail on tap, switchable between calories,
 protein (against the protein goal) and weight (as a line); weight logging with a 30-day
 trend; CSV export of all entries; light/dark/system theming stored per device;
-multiple isolated accounts.
+multiple isolated accounts; a goals area for habits done n× per day, week or month,
+with one-tap check-ins, streaks and milestones, and a GitHub-style history per goal.
 
 Technical constraints future work must respect: Flask with server-rendered static
 HTML pages and hand-written vanilla JS and CSS — no build step, no framework, no
