@@ -102,13 +102,15 @@
       </div>
 
       <div class="coach" id="coach" hidden>
-        <div class="coach-head">
+        <button type="button" class="coach-head" id="coach-toggle" aria-expanded="true"
+                aria-controls="coach-message coach-tips coach-foot" title="Einschätzung ein- oder ausklappen">
           <span class="coach-icon" id="coach-icon" aria-hidden="true"></span>
-          <p class="coach-headline" id="coach-headline"></p>
-        </div>
+          <span class="coach-headline" id="coach-headline"></span>
+          <span class="coach-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+        </button>
         <p class="coach-message" id="coach-message"></p>
         <ul class="coach-tips" id="coach-tips" hidden></ul>
-        <div class="coach-foot">
+        <div class="coach-foot" id="coach-foot">
           <span class="coach-stamp" id="coach-stamp"></span>
           <button class="link" id="coach-refresh">Neu einschätzen</button>
         </div>
@@ -170,6 +172,20 @@
           <button id="weight-btn" class="ghost">Eintragen</button>
         </div>
         <p class="message" id="weight-msg"></p>
+      </div>
+
+      <!-- Kalender im Stil des GitHub-Beitragsgraphen: eine Spalte je Woche,
+           Montag oben. Wie viele Wochen, hängt an der Breite (app.js). -->
+      <div class="dash-calendar">
+        <div class="section-head">
+          <p class="section-title">Kalender</p>
+          <p class="section-sub" id="cal-streak"></p>
+        </div>
+        <div class="cal-grid" id="cal-grid" role="group" aria-label="Erfasste Tage"></div>
+        <div class="cal-foot">
+          <p class="cal-stats" id="cal-stats"></p>
+          <div class="cal-legend" id="cal-legend" aria-hidden="true"></div>
+        </div>
       </div>
     </div>
   </div>

@@ -31,6 +31,9 @@ von Google AI Studio kostenlos.
   Eingabefeld, Foto oder Schnellwahl zählt zu diesem Tag. Einträge vergangener
   Tage lassen sich dort auch bearbeiten, löschen oder auf einen anderen Tag
   verschieben.
+- **Kalender** – Heatmap im Stil des GitHub-Graphen: je Tag ein Kästchen, umso
+  grüner, je näher am Ziel (beim Abnehmen grün unter, bernstein über der Grenze),
+  dazu die Serie erfasster Tage in Folge. Antippen zeigt den Tag zum Nachtragen.
 - **Konten mit E-Mail-Code** – mehrere Personen parallel, jede sieht nur ihre
   eigenen Daten, kein Passwort nötig
 - **Tagesziel** mit Fortschrittsbalken und „noch X kcal bis …"

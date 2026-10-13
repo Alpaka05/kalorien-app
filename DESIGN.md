@@ -484,6 +484,12 @@ border color (`--border` → `--border-strong`) or the surface tone, not the wid
 - **Numeric fields:** `input[type="number"]` switches to mono. The weight field is
   deliberately `type="text"` with `inputmode="decimal"` — with `type="number"`, Safari
   silently discards a comma decimal ("68,5") while still displaying it.
+- **Calendar heatmap:** GitHub-style grid, one column per week, Monday on top,
+  square cells (min 13px, 3px gap) that share the width; the number of weeks follows
+  the width (up to 53). Fill is the accent in three strengths (30/55/78% mixed into
+  `--border`) below the goal and full `--accent` at the goal; `--warn` for a day over
+  the limit when losing weight. Hover only changes the outline, never the fill.
+  Today has a muted outline, the selected day an accent outline.
 - **Backfill bar:** Logging for a past day is a mode, not an attachment. It shows
   as a row above the input in `--accent-bg` with an `--accent` border (the one place
   a whole row is tinted, so nobody books today's lunch on yesterday by accident):
