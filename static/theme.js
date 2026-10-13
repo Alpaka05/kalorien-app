@@ -54,7 +54,7 @@
    * prefers-color-scheme-Variante von <meta name="theme-color"> hilft hier
    * nicht: sie würde die ausdrückliche Wahl in den Einstellungen übergehen.
    */
-  const BAR_COLOR = { light: '#FAF8F3', dark: '#191817', oled: '#000000' };
+  const BAR_COLOR = { light: '#FFFFFF', dark: '#09090B', oled: '#000000' };
 
   function paintBrowserBar(key) {
     let meta = document.querySelector('meta[name="theme-color"]');
@@ -112,4 +112,35 @@
   };
 
   apply();
+})();
+
+/* Seitenleiste auf dem Desktop: ausgeklappt mit Beschriftung oder schmal nur
+ * mit Symbolen. Wie das Farbschema vor dem ersten Zeichnen, sonst springt die
+ * Leiste beim Laden einmal um. Ohne gespeicherte Wahl entscheidet die Breite.
+ */
+(function () {
+  const KEY = 'kcal-sidebar';
+  const CHOICES = ['collapsed', 'expanded'];
+
+  function apply(choice) {
+    if (CHOICES.includes(choice)) document.documentElement.dataset.sidebar = choice;
+    else delete document.documentElement.dataset.sidebar;
+  }
+
+  try {
+    apply(localStorage.getItem(KEY));
+  } catch (err) {
+    /* ignorieren */
+  }
+
+  window.Sidebar = {
+    set(choice) {
+      apply(choice);
+      try {
+        localStorage.setItem(KEY, choice);
+      } catch (err) {
+        /* ignorieren */
+      }
+    },
+  };
 })();

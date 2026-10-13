@@ -112,10 +112,11 @@ without entries as unknown rather than scoring them as zero, and gives no medica
 recommendations or diagnoses. Copy in the app explains consequences before they
 surprise the user.
 
-The existing visual character is warm and quiet — a cream-toned light palette and a
-deliberately warm-tinted dark mode rather than pure black, a muted green accent, a
-single narrow column on the phone (spread over two or three columns on a desktop),
-system sans with monospace reserved for numeric fields.
+The visual character is calm and neutral — a near-black dashboard in the shadcn/ui
+style (zinc neutrals, hairline cards, white primary buttons, a sidebar on the
+desktop), green used only for a met goal, a single narrow column on the phone
+(spread over two or three columns on a desktop), system sans with monospace
+reserved for numeric fields. See `DESIGN.md`.
 
 ## Evidence on Hand
 
