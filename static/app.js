@@ -1492,6 +1492,8 @@ async function loadCoach(refresh = false) {
 async function loadMe() {
   state.me = await api('/api/me');
   $('settings-account').textContent = 'Angemeldet als ' + state.me.email;
+  $('sidebar-account').textContent = state.me.email;
+  $('sidebar-logout').title = 'Abmelden (' + state.me.email + ')';
 }
 
 function fillDayStartOptions() {
@@ -1561,19 +1563,25 @@ function currentRoute() {
   return { ...s, level: Number.isInteger(s.level) && s.level > 0 ? s.level : 1 };
 }
 
-// Auf dem Desktop steht die Leiste in der Hauptansicht oben rechts im Raster,
-// in allen anderen Ansichten in deren Kopfzeile. Auf dem Handy ist sie fest
-// am unteren Rand, egal wo sie im Dokument hängt.
-function placeNav(view) {
-  const nav = $('tabbar');
-  if (view === 'kcal') {
-    document.querySelector('#main-view .topbar-actions').appendChild(nav);
-    return;
-  }
-  const appbar = $('appbar');
-  const target = $(VIEWS[view]);
-  if (appbar.parentElement !== target) target.prepend(appbar);
-  appbar.querySelector('.appbar-nav').appendChild(nav);
+// Pfad in der Kopfzeile: Bereich, darunter ggf. das einzelne Ziel oder das
+// Formular. Die Überschrift der Ansicht ist die letzte Stufe; goals.js setzt
+// sie erst nach dem Laden, deshalb liest der Beobachter unten sie nach.
+const AREA_LABEL = { kcal: 'Kalorien', goals: 'Ziele', settings: 'Einstellungen' };
+const PAGE_TITLE = { goal: 'goal-title', 'goal-form': 'goal-form-title' };
+
+function renderCrumbs() {
+  const area = $('crumb-area');
+  area.textContent = AREA_LABEL[TAB_OF[shownView]];
+  const titleId = PAGE_TITLE[shownView];
+  const page = titleId ? $(titleId).textContent.trim() : '';
+  // Die Bereichsstufe ist nur ein Knopf, wenn darunter noch eine Ebene liegt.
+  area.disabled = !titleId;
+  area.classList.toggle('current', !titleId);
+  if (titleId) area.removeAttribute('aria-current');
+  else area.setAttribute('aria-current', 'page');
+  $('crumb-sep2').hidden = !titleId;
+  $('crumb-page').hidden = !titleId;
+  $('crumb-page').textContent = page;
 }
 
 function renderRoute(route) {
@@ -1583,7 +1591,6 @@ function renderRoute(route) {
   viewScroll[previous] = window.scrollY;
   Object.entries(VIEWS).forEach(([name, id]) => { $(id).hidden = name !== route.view; });
   shownView = route.view;
-  placeNav(route.view);
   const tab = TAB_OF[route.view];
   document.querySelectorAll('#tabbar [data-tab]').forEach((btn) => {
     const on = btn.dataset.tab === tab;
@@ -1591,6 +1598,7 @@ function renderRoute(route) {
     if (on) btn.setAttribute('aria-current', 'page');
     else btn.removeAttribute('aria-current');
   });
+  renderCrumbs();
   // Die Felder nur beim Betreten neu befüllen, damit ungespeicherte Eingaben
   // nicht überschrieben werden.
   if (route.view === 'settings' && previous !== 'settings') fillSettings();
@@ -1889,9 +1897,41 @@ document.addEventListener('keydown', (e) => {
   if (!$('settings-view').hidden) closeSettings();
   else if (!$('goal-view').hidden || !$('goal-form-view').hidden) goBack();
 });
-$('logout-btn').addEventListener('click', async () => {
+async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/login';
+}
+$('logout-btn').addEventListener('click', logout);
+$('sidebar-logout').addEventListener('click', logout);
+
+// Kopfzeile: Pfad, Seitenleiste, Farbschema.
+$('crumb-home').addEventListener('click', () => switchTab('kcal'));
+// Zurück bis zur Zielliste, auch aus dem Formular eines einzelnen Ziels.
+$('crumb-area').addEventListener('click', () => {
+  const { level } = currentRoute();
+  if (level > 1) history.go(-(level - 1));
+});
+Object.values(PAGE_TITLE).forEach((id) => {
+  new MutationObserver(() => {
+    if (PAGE_TITLE[shownView] === id) renderCrumbs();
+  }).observe($(id), { childList: true, characterData: true, subtree: true });
+});
+
+// Eingeklappt heißt: nur Symbole. Die gespeicherte Wahl setzt theme.js schon
+// vor dem ersten Zeichnen; ohne sie entscheidet die Breite (siehe styles.css).
+$('sidebar-toggle').addEventListener('click', () => {
+  // Der sichtbare Zustand zählt, nicht der gespeicherte: unter 1280px ist die
+  // Leiste auch ohne Wahl schmal.
+  const collapsed = $('sidebar').getBoundingClientRect().width < 120;
+  Sidebar.set(collapsed ? 'expanded' : 'collapsed');
+});
+
+// Schneller Wechsel zwischen hell und dunkel. OLED bleibt eine Wahl in den
+// Einstellungen; der Knopf führt von dort aus zurück ins Helle.
+$('theme-toggle').addEventListener('click', () => {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  Theme.set(dark ? 'light' : 'dark');
+  $('theme-input').value = Theme.get();
 });
 
 (async function start() {
