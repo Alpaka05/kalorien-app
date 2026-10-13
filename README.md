@@ -57,6 +57,11 @@ von Google AI Studio kostenlos.
   Mal) als Chips, das Häufigste vorne; ein Tap genügt (ohne neuen API-Aufruf).
   Die Werte kommen vom jüngsten Eintrag, eine Korrektur gilt also auch für den
   Chip. Lässt sich in den Einstellungen ausblenden
+- **Ziele** – eigener Bereich (Tab unten bzw. Umschalter oben rechts) für
+  Gewohnheiten wie „3× pro Woche ins Gym“ oder „1× am Tag etwas Gesundes“: mit
+  einem Tipp eintragen, Serie mit Meilensteinen, Verlauf im Stil des
+  GitHub-Graphen, Nachtragen per Tipp auf einen Tag. Eine geschaffte Woche oder
+  ein geschaffter Monat gibt Konfetti
 - **Gewichts-Tracking** mit Trend über 30 Tage
 - **CSV-Export** aller Einträge
 

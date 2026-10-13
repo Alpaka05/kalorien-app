@@ -94,6 +94,35 @@ CREATE TABLE IF NOT EXISTS coach_cache (
     created_at  TEXT NOT NULL,
     PRIMARY KEY (user_id, day)
 );
+
+-- Ziele im Bereich "Ziele" (im Code "habits", damit sie nicht mit dem
+-- Kalorienziel verwechselt werden): etwas, das man `target`-mal pro
+-- `period` schaffen will, z. B. 3× pro Woche ins Gym.
+CREATE TABLE IF NOT EXISTS habits (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    title       TEXT NOT NULL,
+    icon        TEXT NOT NULL DEFAULT 'star',
+    -- 'day', 'week' oder 'month'. Wochen beginnen montags.
+    period      TEXT NOT NULL,
+    target      INTEGER NOT NULL,
+    -- Logischer Tag der Anlage. Zeiträume davor zählen nicht als verpasst.
+    start_date  TEXT NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL
+);
+
+-- Ein Eintrag je "geschafft". checkin_date ist der logische Tag (mit
+-- persönlichem Tagesbeginn), checkin_time die echte Uhrzeit – bei
+-- nachgetragenen Tagen leer.
+CREATE TABLE IF NOT EXISTS habit_checkins (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    habit_id      INTEGER NOT NULL,
+    user_id       INTEGER NOT NULL,
+    checkin_date  TEXT NOT NULL,
+    checkin_time  TEXT,
+    created_at    TEXT NOT NULL
+);
 """
 
 # Indizes erst nach den Migrationen anlegen: auf einer Datenbank aus der
@@ -103,6 +132,8 @@ CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries (user_id, entry_date
 CREATE INDEX IF NOT EXISTS idx_weights_user_date ON weights (user_id, weigh_date);
 CREATE INDEX IF NOT EXISTS idx_sessions_user      ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_login_codes_email  ON login_codes (email, created_at);
+CREATE INDEX IF NOT EXISTS idx_habits_user        ON habits (user_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_habit_checkins     ON habit_checkins (habit_id, checkin_date);
 """
 
 

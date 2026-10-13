@@ -51,6 +51,26 @@ const ICON = {
   up: '<path d="M12 19V6"/><path d="M6 11.5l6-6 6 6"/>',
   dash: '<path d="M5 12h14"/>',
   alert: '<path d="M12 4.5 2.5 20h19L12 4.5Z"/><path d="M12 10v4.5"/><path d="M12 17.6v.4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  flag: '<path d="M5.5 21V4.5M5.5 4.5h11.5l-2.2 3.7 2.2 3.8H5.5"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
+  // Die Flamme der Serie ist gefüllt, ihr Kern trägt die Farbe der Fläche
+  // dahinter – so bleibt sie auch klein als Flamme lesbar.
+  flame: '<path d="M12.6 2.8c.4 2.6 2.2 4.3 3.7 6 1.4 1.7 2.5 3.4 2.5 5.7A6.8 6.8 0 0 1 12 21.2a6.8 6.8 0 0 1-6.8-6.7c0-2.5 1.1-4.4 2.7-5.8.3 1.7 1.1 2.9 2.4 3.4-.5-3.6.4-6.6 2.3-9.3z" fill="currentColor" stroke-width="1.2"/><path d="M12 20.4a2.9 2.9 0 0 1-2.9-2.9c0-1.7 1.2-2.7 2.9-4.5 1.7 1.8 2.9 2.8 2.9 4.5a2.9 2.9 0 0 1-2.9 2.9z" stroke="none" style="fill:var(--flame-core, var(--surface))"/>',
+  // Symbole, die ein Ziel tragen kann (Liste in habits.py).
+  dumbbell: '<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/>',
+  leaf: '<path d="M5 19.5C5 11 10 5.5 19.5 4.5 19.5 14 14 19 5.5 19z"/><path d="M5 19.5l8.5-8.5"/>',
+  apple: '<path d="M12 8.2c-1.6-1.3-4-1.5-5.6-.2-2.2 1.8-2 5.6-.3 8.6 1.3 2.3 3 3.6 4.3 3.1.6-.2 1.1-.2 1.6 0 1.3.5 3-.8 4.3-3.1 1.7-3 1.9-6.8-.3-8.6-1.6-1.3-4-1.1-5.6.2z"/><path d="M12 8.2c0-2.2.8-3.7 2.6-4.6"/>',
+  book: '<path d="M12 6.5C10 5 7 4.6 4 5v13c3-.4 6 0 8 1.5 2-1.5 5-1.9 8-1.5V5c-3-.4-6 0-8 1.5zM12 6.5v13"/>',
+  drop: '<path d="M12 3.5c3 4 6 7 6 10.5a6 6 0 0 1-12 0c0-3.5 3-6.5 6-10.5z"/>',
+  moon: '<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>',
+  heart: '<path d="M12 19.5s-7-4.3-7-9.6A3.9 3.9 0 0 1 12 7.6a3.9 3.9 0 0 1 7 2.3c0 5.3-7 9.6-7 9.6z"/>',
+  bike: '<circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-7h5.5L18 16M10 9l2.5 7 3-7M8.5 6.5h3M15.5 9l-1-3h2.5"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+  glass: '<path d="M8 3.5h8l-.6 5.2a3.4 3.4 0 0 1-6.8 0zM12 12.2v7.3M8.5 19.5h7"/>',
+  music: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+  star: '<path d="M12 3.8l2.5 5.2 5.6.7-4.1 3.9 1 5.6L12 16.5l-5 2.7 1-5.6-4.1-3.9 5.6-.7z"/>',
 };
 
 function icon(name, size = 16) {
@@ -129,7 +149,11 @@ async function api(path, options = {}) {
   }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    if (data && data.error) throw new Error(data.error);
+    if (data && data.error) {
+      const error = new Error(data.error);
+      error.status = response.status;
+      throw error;
+    }
     // Keine JSON-Antwort heißt: nicht von der App. Den Statuscode nennen,
     // damit sich die Ursache im Log des Proxys wiederfinden lässt.
     const status = response.status;
@@ -1506,45 +1530,135 @@ function fillSettings() {
   setMessage($('settings-msg'), '');
 }
 
-// Die Einstellungen sind eine eigene Ansicht, die die Hauptansicht ersetzt,
-// kein Dialog darüber. Das Öffnen legt einen Verlaufseintrag an: so führen die
-// Zurück-Geste des Handys und die Zurück-Taste des Browsers zur Hauptansicht
-// zurück, statt die App zu verlassen.
-const SETTINGS_STATE = 'settings';
-const inSettingsHistory = () => (history.state && history.state.view) === SETTINGS_STATE;
-let mainScrollY = 0;
+// --------------------------------------------------------------------------
+// Bereiche und Ansichten
+//
+// Die Leiste (Handy: unten, Desktop: oben rechts) wechselt zwischen Kalorien,
+// Zielen und Einstellungen. Unter "Ziele" liegen ein einzelnes Ziel und das
+// Formular als weitere Ebenen. Jede Ebene über den Kalorien ist ein eigener
+// Verlaufseintrag mit { view, id, level }: Die Zurück-Geste des Handys und die
+// Zurück-Taste des Browsers gehen eine Ebene zurück und zuletzt zu den
+// Kalorien, statt die App zu verlassen – und ein Neuladen behält die Ansicht.
+// --------------------------------------------------------------------------
 
-function showSettingsView(show) {
-  if (show === !$('settings-view').hidden) return;
-  // Den Fokus nur mitnehmen, wenn er in der Ansicht lag, die gleich verschwindet –
-  // sonst landet er nach Tastaturbedienung im Nichts. Nach einem Tippen oder
-  // Klick bleibt er, wo er ist.
-  const leaving = show ? $('main-view') : $('settings-view');
+const VIEWS = {
+  kcal: 'main-view',
+  goals: 'goals-view',
+  goal: 'goal-view',
+  'goal-form': 'goal-form-view',
+  settings: 'settings-view',
+};
+const TAB_OF = { kcal: 'kcal', goals: 'goals', goal: 'goals', 'goal-form': 'goals', settings: 'settings' };
+const viewScroll = {};
+let shownView = 'kcal';
+// Ziel eines Bereichswechsels aus einer tieferen Ebene: erst zurück auf
+// Ebene 1 (history.go), dann im popstate ersetzen.
+let pendingRoute = null;
+
+function currentRoute() {
+  const s = history.state;
+  if (!s || !VIEWS[s.view] || s.view === 'kcal') return { view: 'kcal', level: 0 };
+  return { ...s, level: Number.isInteger(s.level) && s.level > 0 ? s.level : 1 };
+}
+
+// Auf dem Desktop steht die Leiste in der Hauptansicht oben rechts im Raster,
+// in allen anderen Ansichten in deren Kopfzeile. Auf dem Handy ist sie fest
+// am unteren Rand, egal wo sie im Dokument hängt.
+function placeNav(view) {
+  const nav = $('tabbar');
+  if (view === 'kcal') {
+    document.querySelector('#main-view .topbar-actions').appendChild(nav);
+    return;
+  }
+  const appbar = $('appbar');
+  const target = $(VIEWS[view]);
+  if (appbar.parentElement !== target) target.prepend(appbar);
+  appbar.querySelector('.appbar-nav').appendChild(nav);
+}
+
+function renderRoute(route) {
+  const previous = shownView;
+  const leaving = $(VIEWS[previous]);
   const hadFocus = leaving.contains(document.activeElement);
-  // Die Hauptansicht soll dort weitergehen, wo sie verlassen wurde, die
-  // Einstellungen beginnen immer oben.
-  if (show) mainScrollY = window.scrollY;
-  $('main-view').hidden = show;
-  $('settings-view').hidden = !show;
-  window.scrollTo(0, show ? 0 : mainScrollY);
-  if (hadFocus) (show ? $('settings-back') : $('settings-btn')).focus({ preventScroll: true });
+  viewScroll[previous] = window.scrollY;
+  Object.entries(VIEWS).forEach(([name, id]) => { $(id).hidden = name !== route.view; });
+  shownView = route.view;
+  placeNav(route.view);
+  const tab = TAB_OF[route.view];
+  document.querySelectorAll('#tabbar [data-tab]').forEach((btn) => {
+    const on = btn.dataset.tab === tab;
+    btn.classList.toggle('active', on);
+    if (on) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+  });
+  // Die Felder nur beim Betreten neu befüllen, damit ungespeicherte Eingaben
+  // nicht überschrieben werden.
+  if (route.view === 'settings' && previous !== 'settings') fillSettings();
+  if (route.view === 'goals') showGoalsList();
+  if (route.view === 'goal') showGoalDetail(route.id);
+  if (route.view === 'goal-form') showGoalForm(route.id || null);
+  // Kalorien und Zielliste gehen dort weiter, wo man sie verlassen hat; alles
+  // andere beginnt oben.
+  const keep = route.view === 'kcal' || route.view === 'goals';
+  window.scrollTo(0, keep ? viewScroll[route.view] || 0 : 0);
+  // Den Fokus nur mitnehmen, wenn er in der Ansicht lag, die gerade
+  // verschwunden ist – sonst landet er nach Tastaturbedienung im Nichts.
+  if (hadFocus) {
+    const target = route.view === 'kcal'
+      ? document.querySelector('#tabbar .tab.active')
+      : $(VIEWS[route.view]).querySelector('h1');
+    if (target) target.focus({ preventScroll: true });
+  }
 }
 
-function openSettings() {
-  fillSettings();
-  history.pushState({ view: SETTINGS_STATE }, '');
-  showSettingsView(true);
+// Eine Ebene tiefer, z. B. von der Zielliste zu einem Ziel.
+function openView(view, id = null) {
+  const route = { view, level: currentRoute().level + 1 };
+  if (id != null) route.id = id;
+  history.pushState(route, '');
+  renderRoute(route);
 }
 
-// Erst umschalten, dann den eigenen Verlaufseintrag zurücknehmen. history.back()
-// wirkt erst mit dem popstate, bis dahin meldet history.state noch die
-// Einstellungen. Ein zweiter Aufruf in dieser Lücke – etwa Zurück-Pfeil während
-// des Speicherns, danach schließt das Speichern selbst – ginge sonst einen
-// Schritt weiter zurück, aus der App heraus. Deshalb zählt die sichtbare Ansicht.
+function goBack() {
+  if (currentRoute().level > 0) history.back();
+}
+
+// Ersetzt die aktuelle Ansicht, ohne eine Ebene anzulegen – etwa nach dem
+// Löschen eines Ziels, dessen Seite es nicht mehr gibt.
+function replaceView(view, id = null) {
+  const route = { view, level: currentRoute().level };
+  if (id != null) route.id = id;
+  history.replaceState(route, '');
+  renderRoute(route);
+}
+
+function switchTab(tab) {
+  const current = currentRoute();
+  if (tab === 'kcal') {
+    if (current.level > 0) history.go(-current.level);
+    else window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  const route = { view: tab, level: 1 };
+  if (current.level === 0) {
+    history.pushState(route, '');
+    renderRoute(route);
+  } else if (current.view === tab) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else if (current.level === 1) {
+    history.replaceState(route, '');
+    renderRoute(route);
+  } else {
+    pendingRoute = route;
+    history.go(-(current.level - 1));
+  }
+}
+
+// Abbrechen und Escape in den Einstellungen: Eingaben verwerfen und zurück.
 function closeSettings() {
   if ($('settings-view').hidden) return;
-  showSettingsView(false);
-  if (inSettingsHistory()) history.back();
+  if (currentRoute().level > 0) history.back();
+  else switchTab('kcal');
 }
 
 // Nur Admin-Konten bekommen die Modellliste von /api/me. Für alle anderen
@@ -1589,13 +1703,19 @@ async function saveSettings() {
     btn.disabled = false;
     return;
   }
-  // Erst zur Hauptansicht zurück, wenn das Speichern geklappt hat – eine
-  // Fehlermeldung in der verlassenen Ansicht würde niemand sehen. Fehler beim
-  // Neuladen danach gehören in die Hauptanzeige.
-  closeSettings();
+  // Die Einstellungen sind ein eigener Bereich: nach dem Speichern bleibt
+  // man dort und sieht die Bestätigung.
   const moved = state.me.moved_entries || 0;
+  setMessage(
+    $('settings-msg'),
+    moved
+      ? `Gespeichert. ${moved} ${moved === 1 ? 'Eintrag wurde' : 'Einträge wurden'} auf den neuen Tagesbeginn umgebucht.`
+      : 'Gespeichert.',
+    'ok'
+  );
   try {
-    await refreshAll();
+    // Tagesbeginn und Ziel ändern auch, was "heute" bei den Zielen heißt.
+    await Promise.all([refreshAll(), loadHabits()]);
     // Ziel, Richtung oder Modell können sich geändert haben – dann rechnet
     // der Server neu, sonst kommt die gespeicherte Einschätzung zurück.
     loadCoach();
@@ -1603,13 +1723,6 @@ async function saveSettings() {
     setMessage($('error-msg'), err.message);
   } finally {
     btn.disabled = false;
-  }
-  if (moved) {
-    setMessage(
-      $('error-msg'),
-      `${moved} ${moved === 1 ? 'Eintrag wurde' : 'Einträge wurden'} auf den neuen Tagesbeginn umgebucht.`,
-      'ok'
-    );
   }
 }
 
@@ -1752,24 +1865,29 @@ document.querySelectorAll('[data-range]').forEach((btn) => {
 document.querySelectorAll('[data-metric]').forEach((btn) => {
   btn.addEventListener('click', () => setMetric(btn.dataset.metric));
 });
-$('settings-btn').addEventListener('click', openSettings);
-$('settings-back').addEventListener('click', closeSettings);
+document.querySelectorAll('#tabbar [data-tab]').forEach((btn) => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
 $('settings-cancel').addEventListener('click', closeSettings);
 $('settings-save').addEventListener('click', saveSettings);
 $('goal-direction-input').addEventListener('change', renderGoalHint);
 // Das Farbschema liegt im localStorage, nicht im Konto: es wirkt sofort und
 // gehoert deshalb nicht in die PATCH-Nutzlast von "Speichern".
 $('theme-input').addEventListener('change', (e) => Theme.set(e.target.value));
-// Zurück-Geste, Zurück- und Vorwärts-Taste des Browsers. Die Felder werden nur
-// beim Wechsel in die Einstellungen neu befüllt, damit ungespeicherte Eingaben
-// nicht überschrieben werden.
+// Zurück-Geste, Zurück- und Vorwärts-Taste des Browsers.
 window.addEventListener('popstate', () => {
-  const show = inSettingsHistory();
-  if (show && $('settings-view').hidden) fillSettings();
-  showSettingsView(show);
+  let route = currentRoute();
+  if (pendingRoute) {
+    history.replaceState(pendingRoute, '');
+    route = pendingRoute;
+    pendingRoute = null;
+  }
+  renderRoute(route);
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !$('settings-view').hidden) closeSettings();
+  if (e.key !== 'Escape') return;
+  if (!$('settings-view').hidden) closeSettings();
+  else if (!$('goal-view').hidden || !$('goal-form-view').hidden) goBack();
 });
 $('logout-btn').addEventListener('click', async () => {
   await fetch('/api/auth/logout', { method: 'POST' });
@@ -1779,12 +1897,11 @@ $('logout-btn').addEventListener('click', async () => {
 (async function start() {
   try {
     await loadMe();
-    // Neu geladen, während die Einstellungen offen waren: der Verlaufseintrag
-    // überlebt das Neuladen, also auch die Ansicht.
-    if (inSettingsHistory()) {
-      fillSettings();
-      showSettingsView(true);
-    }
+    // Neu geladen in einem anderen Bereich: der Verlaufseintrag überlebt das
+    // Neuladen, also auch die Ansicht.
+    renderRoute(currentRoute());
+    // Für die Zahl am Ziele-Tab; Fehler hier sollen die Kalorien nicht stören.
+    loadHabits().catch(() => {});
     document.querySelector('[data-range="7"]').classList.add('active');
     setMetric(storedMetric());
     await refreshAll();

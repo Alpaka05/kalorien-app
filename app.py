@@ -29,6 +29,7 @@ from flask import (
 import ai
 import auth
 import db
+import habits
 import mailer
 from timeutil import (
     calendar_date_of,
@@ -561,6 +562,7 @@ def update_me():
         moved = 0
         if new_start is not None and new_start != old_start:
             moved = rebucket_entries(g.conn, g.user["id"], old_start, new_start)
+            rebucket_checkins(g.conn, g.user["id"], old_start, new_start)
         if any(k in payload for k in ("kcal_goal", "protein_goal", "goal_direction")):
             record_goal_change(g.conn, g.user["id"])
         g.conn.commit()
@@ -641,6 +643,31 @@ def rebucket_entries(conn, user_id: int, old_start: int, new_start: int) -> int:
         conn.executemany(
             "UPDATE entries SET entry_date = ? WHERE id = ?", changes
         )
+    return len(changes)
+
+
+def rebucket_checkins(conn, user_id: int, old_start: int, new_start: int) -> int:
+    """Wie rebucket_entries, für die Einträge der Ziele.
+
+    Nachgetragene Tage ohne Uhrzeit bleiben, wo sie sind – ohne Uhrzeit lässt
+    sich nicht sagen, ob sie vor oder nach dem Tagesbeginn lagen.
+    """
+    rows = conn.execute(
+        "SELECT id, checkin_date, checkin_time FROM habit_checkins "
+        "WHERE user_id = ? AND checkin_time IS NOT NULL",
+        (user_id,),
+    ).fetchall()
+    changes = []
+    for row in rows:
+        try:
+            calendar = calendar_date_of(row["checkin_date"], row["checkin_time"], old_start)
+            target = logical_date_of(calendar, row["checkin_time"], new_start)
+        except (ValueError, TypeError):
+            continue
+        if target != row["checkin_date"]:
+            changes.append((target, row["id"]))
+    if changes:
+        conn.executemany("UPDATE habit_checkins SET checkin_date = ? WHERE id = ?", changes)
     return len(changes)
 
 
@@ -1169,6 +1196,280 @@ def coach():
     g.conn.commit()
     result["cached"] = False
     return jsonify(result)
+
+
+# --------------------------------------------------------------------------
+# Ziele (im Code "habits", siehe habits.py)
+# --------------------------------------------------------------------------
+
+def own_habit(habit_id: int):
+    return g.conn.execute(
+        "SELECT * FROM habits WHERE id = ? AND user_id = ?", (habit_id, g.user["id"])
+    ).fetchone()
+
+
+def can_check(habit, count_that_day: int) -> bool:
+    # Tagesziele bis zum Ziel, Wochen- und Monatsziele einmal je Tag.
+    limit = int(habit["target"]) if habit["period"] == "day" else 1
+    return count_that_day < limit
+
+
+def checkin_json(row) -> dict:
+    return {"id": row["id"], "date": row["checkin_date"], "time": row["checkin_time"]}
+
+
+def habit_json(conn, habit, today: str) -> dict:
+    rows = conn.execute(
+        "SELECT id, checkin_date, checkin_time FROM habit_checkins WHERE habit_id = ? "
+        "ORDER BY checkin_date ASC, COALESCE(checkin_time, '') ASC, id ASC",
+        (habit["id"],),
+    ).fetchall()
+    result = habits.stats(habit, [r["checkin_date"] for r in rows], today)
+    current = result["current"]
+    current["checkins"] = [
+        checkin_json(r) for r in rows if current["start"] <= r["checkin_date"] <= current["end"]
+    ]
+    today_rows = [r for r in rows if r["checkin_date"] == today]
+    result.update(
+        {
+            "id": habit["id"],
+            "title": habit["title"],
+            "icon": habit["icon"],
+            "period": habit["period"],
+            "target": int(habit["target"]),
+            "start_date": habit["start_date"],
+            "today": today,
+            "today_count": len(today_rows),
+            "today_checkins": [r["id"] for r in today_rows],
+            "can_check_today": can_check(habit, len(today_rows)),
+        }
+    )
+    return result
+
+
+def parse_habit(payload: dict, existing=None) -> dict:
+    """Prüft Name, Zeitraum, Anzahl und Symbol. Beim Ändern nur, was kommt."""
+    fields = {}
+    if existing is None or "title" in payload:
+        title = " ".join(str(payload.get("title") or "").split())
+        if not title:
+            raise ValueError("Bitte gib dem Ziel einen Namen.")
+        if len(title) > habits.TITLE_MAX:
+            raise ValueError(f"Der Name ist zu lang (höchstens {habits.TITLE_MAX} Zeichen).")
+        fields["title"] = title
+    if existing is None or "period" in payload:
+        period = payload.get("period")
+        if period not in habits.PERIODS:
+            raise ValueError("Zeitraum muss Tag, Woche oder Monat sein.")
+        fields["period"] = period
+    period = fields.get("period") or existing["period"]
+    if existing is None or "target" in payload or "period" in payload:
+        raw = payload.get("target", existing["target"] if existing is not None else None)
+        top = habits.MAX_TARGET[period]
+        target = parse_number(raw, "Anzahl", 1, top)
+        if target != int(target):
+            raise ValueError("Die Anzahl muss eine ganze Zahl sein.")
+        fields["target"] = int(target)
+    if existing is None or "icon" in payload:
+        icon = payload.get("icon") or "star"
+        if icon not in habits.ICONS:
+            raise ValueError("Unbekanntes Symbol.")
+        fields["icon"] = icon
+    return fields
+
+
+@app.route("/api/habits", methods=["GET"])
+@require_user
+def list_habits():
+    today = user_today(g.user)
+    rows = g.conn.execute(
+        "SELECT * FROM habits WHERE user_id = ? ORDER BY sort_order ASC, id ASC",
+        (g.user["id"],),
+    ).fetchall()
+    return jsonify({"today": today, "habits": [habit_json(g.conn, r, today) for r in rows]})
+
+
+@app.route("/api/habits", methods=["POST"])
+@require_user
+def create_habit():
+    try:
+        fields = parse_habit(body())
+    except ValueError as exc:
+        return bad(str(exc))
+    count = g.conn.execute(
+        "SELECT COUNT(*) AS n, COALESCE(MAX(sort_order), 0) AS last FROM habits WHERE user_id = ?",
+        (g.user["id"],),
+    ).fetchone()
+    if count["n"] >= habits.MAX_HABITS:
+        return bad(f"Mehr als {habits.MAX_HABITS} Ziele gehen nicht.")
+    today = user_today(g.user)
+    cur = g.conn.execute(
+        "INSERT INTO habits (user_id, title, icon, period, target, start_date, sort_order, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            g.user["id"], fields["title"], fields["icon"], fields["period"], fields["target"],
+            today, count["last"] + 1, utc_now_iso(),
+        ),
+    )
+    g.conn.commit()
+    return jsonify(habit_json(g.conn, own_habit(cur.lastrowid), today)), 201
+
+
+@app.route("/api/habits/<int:habit_id>", methods=["GET"])
+@require_user
+def get_habit(habit_id: int):
+    habit = own_habit(habit_id)
+    if not habit:
+        return bad("Ziel nicht gefunden.", 404)
+    today = user_today(g.user)
+    try:
+        end = parse_date(request.args["to"], "Ende") if request.args.get("to") else today
+        start = (
+            parse_date(request.args["from"], "Beginn")
+            if request.args.get("from")
+            else day_offset_iso(26 * 7, end)
+        )
+    except ValueError as exc:
+        return bad(str(exc))
+    if start > end:
+        return bad("Der Beginn liegt nach dem Ende.")
+    if day_offset_iso(400, end) > start:
+        return bad("Höchstens 400 Tage auf einmal.")
+    days = {
+        r["checkin_date"]: r["n"]
+        for r in g.conn.execute(
+            "SELECT checkin_date, COUNT(*) AS n FROM habit_checkins "
+            "WHERE habit_id = ? AND checkin_date BETWEEN ? AND ? GROUP BY checkin_date",
+            (habit_id, start, end),
+        )
+    }
+    dates = [
+        r["checkin_date"]
+        for r in g.conn.execute(
+            "SELECT checkin_date FROM habit_checkins WHERE habit_id = ? AND checkin_date BETWEEN ? AND ?",
+            (habit_id, day_offset_iso(40, start), end),
+        )
+    ]
+    result = habit_json(g.conn, habit, today)
+    result["history"] = {
+        "from": start,
+        "to": end,
+        "days": days,
+        "periods": habits.met_periods(dates, habit, start, min(end, today)),
+    }
+    return jsonify(result)
+
+
+@app.route("/api/habits/<int:habit_id>", methods=["PATCH"])
+@require_user
+def update_habit(habit_id: int):
+    habit = own_habit(habit_id)
+    if not habit:
+        return bad("Ziel nicht gefunden.", 404)
+    try:
+        fields = parse_habit(body(), habit)
+    except ValueError as exc:
+        return bad(str(exc))
+    if fields:
+        sets = ", ".join(f"{name} = ?" for name in fields)
+        g.conn.execute(
+            f"UPDATE habits SET {sets} WHERE id = ? AND user_id = ?",
+            (*fields.values(), habit_id, g.user["id"]),
+        )
+        g.conn.commit()
+    return jsonify(habit_json(g.conn, own_habit(habit_id), user_today(g.user)))
+
+
+@app.route("/api/habits/<int:habit_id>", methods=["DELETE"])
+@require_user
+def delete_habit(habit_id: int):
+    if not own_habit(habit_id):
+        return bad("Ziel nicht gefunden.", 404)
+    g.conn.execute("DELETE FROM habit_checkins WHERE habit_id = ?", (habit_id,))
+    g.conn.execute("DELETE FROM habits WHERE id = ? AND user_id = ?", (habit_id, g.user["id"]))
+    g.conn.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/habits/<int:habit_id>/checkins", methods=["GET"])
+@require_user
+def list_checkins(habit_id: int):
+    if not own_habit(habit_id):
+        return bad("Ziel nicht gefunden.", 404)
+    try:
+        day = parse_date(request.args.get("date") or user_today(g.user))
+    except ValueError as exc:
+        return bad(str(exc))
+    rows = g.conn.execute(
+        "SELECT id, checkin_date, checkin_time FROM habit_checkins "
+        "WHERE habit_id = ? AND checkin_date = ? ORDER BY COALESCE(checkin_time, ''), id",
+        (habit_id, day),
+    ).fetchall()
+    return jsonify({"date": day, "checkins": [checkin_json(r) for r in rows]})
+
+
+@app.route("/api/habits/<int:habit_id>/checkins", methods=["POST"])
+@require_user
+def add_checkin(habit_id: int):
+    habit = own_habit(habit_id)
+    if not habit:
+        return bad("Ziel nicht gefunden.", 404)
+    payload = body()
+    today = user_today(g.user)
+    try:
+        day = parse_date(payload["date"]) if payload.get("date") else today
+    except ValueError as exc:
+        return bad(str(exc))
+    if day > today:
+        return bad("Für künftige Tage lässt sich nichts eintragen.")
+    count = g.conn.execute(
+        "SELECT COUNT(*) AS n FROM habit_checkins WHERE habit_id = ? AND checkin_date = ?",
+        (habit_id, day),
+    ).fetchone()["n"]
+    if not can_check(habit, count):
+        if habit["period"] == "day":
+            return bad("Für diesen Tag ist das Ziel schon erreicht.", 409)
+        return bad(
+            "An diesem Tag ist schon eingetragen – bei Wochen- und Monatszielen zählt jeder Tag einmal.",
+            409,
+        )
+    before = habit_json(g.conn, habit, today)
+    cur = g.conn.execute(
+        "INSERT INTO habit_checkins (habit_id, user_id, checkin_date, checkin_time, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (habit_id, g.user["id"], day, local_time_hhmm() if day == today else None, utc_now_iso()),
+    )
+    g.conn.commit()
+    after = habit_json(g.conn, habit, today)
+    # "Geschafft" nur für den Eintrag, der den laufenden Zeitraum voll macht –
+    # darauf reagiert das Frontend mit Konfetti (bei Wochen und Monaten).
+    in_current = before["current"]["start"] <= day <= before["current"]["end"]
+    completed = in_current and not before["current"]["met"] and after["current"]["met"]
+    return jsonify(
+        {
+            "habit": after,
+            "checkin": {"id": cur.lastrowid, "date": day},
+            "completed": completed,
+            "milestone": after["streak"] if completed and after["milestone_hit"] else None,
+            "record": completed and before["best"] > 0 and after["streak"] > before["best"],
+        }
+    ), 201
+
+
+@app.route("/api/habits/<int:habit_id>/checkins/<int:checkin_id>", methods=["DELETE"])
+@require_user
+def delete_checkin(habit_id: int, checkin_id: int):
+    habit = own_habit(habit_id)
+    if not habit:
+        return bad("Ziel nicht gefunden.", 404)
+    cur = g.conn.execute(
+        "DELETE FROM habit_checkins WHERE id = ? AND habit_id = ? AND user_id = ?",
+        (checkin_id, habit_id, g.user["id"]),
+    )
+    if not cur.rowcount:
+        return bad("Eintrag nicht gefunden.", 404)
+    g.conn.commit()
+    return jsonify({"habit": habit_json(g.conn, habit, user_today(g.user))})
 
 
 # --------------------------------------------------------------------------
