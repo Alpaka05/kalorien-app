@@ -177,26 +177,16 @@ function setMessage(el, text, kind = 'error') {
 // Eintrag hinzufügen
 // --------------------------------------------------------------------------
 
-// keepLabel: Chips tragen ihre kcal-Zahl in einem eigenen Element. Ein
-// Textwechsel würde die Auszeichnung zerstören (und den Chip beim Zurücksetzen
-// auf eine Zeile Text eindampfen), deshalb zeigen sie das Warten nur über den
-// gesperrten Zustand.
-// onSaved läuft direkt nach dem Speichern, noch bei gesperrtem Knopf. Das
-// Eingabefeld leert nur handleAdd darüber – ein Chip soll keinen Text löschen,
-// der gerade getippt wird.
-async function addEntry(payload, buttonEl, keepLabel = false, onSaved = null) {
+// Schnellwahl: die Werte sind bekannt, es braucht keine Schätzung und damit
+// auch keine Warteschlange. Der Chip trägt seine kcal-Zahl in einem eigenen
+// Element; ein Textwechsel würde die Auszeichnung zerstören, deshalb zeigt er
+// das Speichern nur über den gesperrten Zustand.
+async function addEntry(payload, chip) {
   setMessage($('error-msg'), '');
   state.undo = null;
-  const label = buttonEl && !keepLabel ? buttonEl.textContent : null;
-  if (buttonEl) {
-    buttonEl.disabled = true;
-    if (!keepLabel) {
-      buttonEl.textContent = payload.kcal == null ? 'Schätze…' : 'Speichere…';
-    }
-  }
-  // Beim Nachtragen gilt der Tag für alles, was hier ankommt – Eingabefeld,
-  // Foto und Schnellwahl. Die Uhrzeit ist optional, leer nimmt der Server die
-  // jetzige.
+  chip.disabled = true;
+  // Beim Nachtragen gilt der Tag auch für die Schnellwahl. Die Uhrzeit ist
+  // optional, leer nimmt der Server die jetzige.
   const backfill = state.backfill;
   if (backfill) {
     payload = { ...payload, date: backfill };
@@ -204,7 +194,6 @@ async function addEntry(payload, buttonEl, keepLabel = false, onSaved = null) {
   }
   try {
     await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
-    if (onSaved) onSaved();
     // Den Tag aufklappen, damit der neue Eintrag sofort zu sehen ist.
     if (backfill && state.metric !== 'weight') state.selectedDay = backfill;
     await refreshAll();
@@ -212,19 +201,24 @@ async function addEntry(payload, buttonEl, keepLabel = false, onSaved = null) {
   } catch (err) {
     setMessage($('error-msg'), err.message);
   } finally {
-    if (buttonEl) {
-      buttonEl.disabled = false;
-      if (!keepLabel) buttonEl.textContent = label;
-    }
+    chip.disabled = false;
   }
 }
 
-async function handleAdd() {
-  // Solange eine Schätzung läuft, ist der Knopf gesperrt – Enter im Feld
-  // kommt aber an ihm vorbei. Ohne diese Abfrage speichert ein zweites Enter
-  // während der Schätzung denselben Eintrag doppelt (und kostet einen
-  // zweiten KI-Aufruf).
-  if ($('add-btn').disabled) return;
+// --------------------------------------------------------------------------
+// Warteschlange
+//
+// Enter gibt das Eingabefeld sofort wieder frei: was abgeschickt wurde, wartet
+// unter dem Feld, bis die KI es geschätzt hat. Abgearbeitet wird der Reihe
+// nach – so landen die Einträge in der Reihenfolge, in der sie getippt
+// wurden, und mehrere Schätzungen laufen nicht gleichzeitig gegen die API.
+// --------------------------------------------------------------------------
+
+const queue = [];       // { id, desc, image, date, time, status, error }
+let queueSeq = 0;
+let queueRunning = false;
+
+function handleAdd() {
   const input = $('food-input');
   const desc = input.value.trim();
   const photo = state.photo;
@@ -232,19 +226,127 @@ async function handleAdd() {
     setMessage($('error-msg'), 'Bitte gib ein, was du gegessen oder getrunken hast.');
     return;
   }
-  const payload = photo ? { desc, image: photo } : { desc };
-  setPhotoBusy(!!photo);
-  // Nur leeren, wenn dort noch der gespeicherte Text steht – wer während der
-  // Schätzung schon weitertippt, verliert sonst das Neue. Schlägt die
-  // Schätzung fehl, bleibt das Foto für einen zweiten Versuch hängen.
-  await addEntry(payload, $('add-btn'), false, () => {
-    if (input.value.trim() === desc) input.value = '';
-    if (state.photo === photo) clearPhoto();
+  setMessage($('error-msg'), '');
+  // Tag und Uhrzeit des Nachtragens gelten so, wie sie beim Abschicken
+  // standen – auch wenn die Leiste geschlossen wird, bevor die KI dran war.
+  queue.push({
+    id: ++queueSeq,
+    desc,
+    image: photo,
+    date: state.backfill,
+    time: state.backfill ? $('backfill-time').value || null : null,
+    status: 'waiting',
+    error: null,
   });
-  setPhotoBusy(false);
-  // Während der Schätzung kann das Nachtragen begonnen oder beendet worden
-  // sein; addEntry stellt die Beschriftung von vorher wieder her.
-  syncAddLabel();
+  input.value = '';
+  if (photo) clearPhoto();
+  input.focus({ preventScroll: true });
+  renderQueue();
+  runQueue();
+}
+
+async function runQueue() {
+  if (queueRunning) return;
+  queueRunning = true;
+  try {
+    let item;
+    while ((item = queue.find((q) => q.status === 'waiting'))) {
+      item.status = 'running';
+      renderQueue();
+      const payload = item.image ? { desc: item.desc, image: item.image } : { desc: item.desc };
+      if (item.date) payload.date = item.date;
+      if (item.time) payload.time = item.time;
+      try {
+        await api('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
+      } catch (err) {
+        item.status = 'error';
+        item.error = err.message;
+        renderQueue();
+        continue;
+      }
+      queue.splice(queue.indexOf(item), 1);
+      state.undo = null;
+      // Den Tag aufklappen, damit der nachgetragene Eintrag zu sehen ist.
+      if (item.date && state.metric !== 'weight') state.selectedDay = item.date;
+      renderQueue();
+      try {
+        await refreshAll();
+        if (item.date) setMessage($('error-msg'), 'Nachgetragen für ' + dateLong(item.date) + '.', 'ok');
+      } catch (err) {
+        setMessage($('error-msg'), err.message);
+      }
+    }
+  } finally {
+    queueRunning = false;
+  }
+}
+
+function renderQueue() {
+  const list = $('queue-list');
+  list.textContent = '';
+  list.hidden = !queue.length;
+  queue.forEach((item) => list.appendChild(buildQueueRow(item)));
+}
+
+function buildQueueRow(item) {
+  const row = document.createElement('div');
+  row.className = 'queue-row ' + item.status;
+
+  if (item.image) {
+    const thumb = document.createElement('img');
+    thumb.className = 'queue-thumb';
+    thumb.src = item.image;
+    thumb.alt = '';
+    row.appendChild(thumb);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'queue-meta';
+  const desc = document.createElement('p');
+  desc.className = 'queue-desc';
+  desc.textContent = item.desc || 'Foto';
+  const note = document.createElement('p');
+  note.className = 'queue-note';
+  const day = item.date ? ' · für ' + dateShort(item.date) : '';
+  note.textContent = {
+    waiting: 'Wartet…',
+    running: 'Schätze…',
+    error: item.error,
+  }[item.status] + day;
+  meta.append(desc, note);
+  row.appendChild(meta);
+
+  if (item.status === 'error') {
+    const retry = document.createElement('button');
+    retry.className = 'link';
+    retry.textContent = 'Nochmal';
+    retry.addEventListener('click', () => {
+      item.status = 'waiting';
+      item.error = null;
+      renderQueue();
+      runQueue();
+    });
+    // Verwerfen legt den Text zurück ins Eingabefeld, damit er sich
+    // verbessern lässt – aber nur, wenn dort gerade nichts anderes steht.
+    const remove = document.createElement('button');
+    remove.className = 'icon-btn';
+    remove.title = 'Verwerfen';
+    remove.setAttribute('aria-label', 'Verwerfen');
+    remove.appendChild(icon('close'));
+    remove.addEventListener('click', () => {
+      queue.splice(queue.indexOf(item), 1);
+      const input = $('food-input');
+      if (!input.value.trim() && !state.photo) input.value = item.desc;
+      renderQueue();
+    });
+    row.append(retry, remove);
+  } else {
+    const spinner = document.createElement('span');
+    spinner.className = 'queue-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    row.appendChild(spinner);
+  }
+  return row;
 }
 
 // --------------------------------------------------------------------------
@@ -252,8 +354,7 @@ async function handleAdd() {
 // --------------------------------------------------------------------------
 
 function syncAddLabel() {
-  const btn = $('add-btn');
-  if (!btn.disabled) btn.textContent = state.backfill ? 'Nachtragen' : 'Hinzufügen';
+  $('add-btn').textContent = state.backfill ? 'Nachtragen' : 'Hinzufügen';
 }
 
 function startBackfill(date) {
@@ -315,7 +416,7 @@ function shrinkPhoto(file) {
 }
 
 async function attachPhoto(file) {
-  if (!file || !file.type.startsWith('image/') || $('add-btn').disabled) return;
+  if (!file || !file.type.startsWith('image/')) return;
   setMessage($('error-msg'), '');
   try {
     state.photo = await shrinkPhoto(file);
@@ -336,16 +437,6 @@ function clearPhoto() {
   $('photo-thumb').removeAttribute('src');
   $('photo-btn').classList.remove('on');
   $('food-input').placeholder = 'z. B. 2 Scheiben Toast mit Butter';
-}
-
-function setPhotoBusy(busy) {
-  $('photo-attach').classList.toggle('busy', busy);
-  $('photo-title').textContent = busy ? 'Schaue mir das Foto an…' : 'Foto angehängt';
-  $('photo-hint').textContent = busy
-    ? 'Dauert meist ein paar Sekunden.'
-    : 'Schreib dazu, was man nicht sieht – oder füg es gleich hinzu.';
-  $('photo-remove').disabled = busy;
-  $('photo-btn').disabled = busy;
 }
 
 function firstImage(list) {
@@ -735,8 +826,7 @@ function buildPresetChip(preset) {
   chip.addEventListener('click', () =>
     addEntry(
       { desc: preset.desc, kcal: preset.kcal, protein: preset.protein },
-      chip,
-      true
+      chip
     )
   );
   return chip;
@@ -1819,6 +1909,10 @@ if ('ResizeObserver' in window) {
 }
 
 $('add-btn').addEventListener('click', handleAdd);
+// Was noch in der Warteschlange steht, gibt es nur in diesem Tab.
+window.addEventListener('beforeunload', (e) => {
+  if (queue.length) e.preventDefault();
+});
 $('day-detail-add').addEventListener('click', () => startBackfill(state.selectedDay));
 $('backfill-close').addEventListener('click', closeBackfill);
 $('photo-btn').addEventListener('click', () => $('photo-input').click());
