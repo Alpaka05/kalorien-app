@@ -320,8 +320,35 @@ a:hover { color: var(--text-primary); }
   border-radius: var(--radius-sm); background: var(--border);
   transition: opacity var(--dur) var(--ease);
 }
-.photo-attach.busy .photo-thumb { opacity: 0.6; }
 .photo-meta { flex: 1; min-width: 0; }
+/* Warteschlange unter dem Eingabefeld: eine Zeile je abgeschicktem Eintrag,
+   bis die KI ihn geschätzt hat. */
+.queue-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.queue-list[hidden] { display: none; }
+.queue-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.queue-row.waiting { opacity: 0.7; }
+.queue-row.error { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.queue-thumb {
+  width: 32px; height: 32px; flex: none; object-fit: cover;
+  border-radius: var(--radius-sm); background: var(--border);
+}
+.queue-meta { flex: 1; min-width: 0; }
+.queue-desc {
+  margin: 0; font-size: 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.queue-note { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+.queue-row.error .queue-note { color: var(--danger); }
+.queue-row button.link { flex-shrink: 0; font-size: 13.5px; }
+.queue-spinner {
+  width: 16px; height: 16px; flex: none; border-radius: 50%;
+  border: 2px solid var(--border-strong); border-top-color: var(--text-primary);
+}
+.queue-row.running .queue-spinner { animation: queue-spin 800ms linear infinite; }
+@keyframes queue-spin { to { transform: rotate(360deg); } }
 .photo-title { margin: 0; font-size: 13.5px; }
 .photo-hint { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
 /* Nachtragen ist ein Modus, kein Anhang: die Leiste ist deshalb grün
