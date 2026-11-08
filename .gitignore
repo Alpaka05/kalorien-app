@@ -6,3 +6,5 @@ __pycache__/
 .claude/
 .impeccable/
 .DS_Store
+.venv/
+.pytest_cache/
