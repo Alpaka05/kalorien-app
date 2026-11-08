@@ -275,6 +275,19 @@ wichtigsten:
 | `REGISTRATION_OPEN` | leer | `true` = jede Adresse darf sich registrieren |
 | `SMTP_*` | leer | Ohne Angabe steht der Anmeldecode im Log |
 
+## Tests
+
+Die Tests laufen ohne Netz und ohne API-Schlüssel: jede Prüfung bekommt eine
+frische Datenbank, eine feste Uhr, und die KI wird durch eine Attrappe ersetzt.
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+.venv/bin/python -m pytest -q
+```
+
+Auf GitHub laufen sie bei jedem Push auf `master` und bei jedem Pull Request.
+
 ## Hinweise
 
 Kalorienangaben sind Schätzungen auf Basis üblicher Portionsgrößen, keine exakte
