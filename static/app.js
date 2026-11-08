@@ -2027,6 +2027,11 @@ $('theme-toggle').addEventListener('click', () => {
   Theme.set(dark ? 'light' : 'dark');
   $('theme-input').value = Theme.get();
 });
+$('logout-all-btn').addEventListener('click', async () => {
+  if (!window.confirm('Auf allen Geräten abmelden? Danach brauchst du überall einen neuen Code.')) return;
+  await fetch('/api/auth/logout-all', { method: 'POST' });
+  window.location.href = '/login';
+});
 
 (async function start() {
   try {
